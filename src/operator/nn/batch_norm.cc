@@ -32,6 +32,11 @@
 #endif  // MXNET_USE_MKL2017
 #include <nnvm/op_attr_types.h>
 #include "../elemwise_op_common.h"
+#include "./mkldnn/mkldnn_base-inl.h"
+#if MXNET_USE_MKLDNN == 1
+#include "./mkldnn/mkldnn_batch_norm-inl.h"
+#endif
+
 
 /*! \brief inverse standard deviation <-> variance */
 #define VARIANCE_TO_INVSTD(__var$,    __eps$)   (1.0/sqrt((__var$) + DType(__eps$)))
@@ -379,6 +384,135 @@ static bool BatchNormType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+void BatchNormCompute_CPU(const nnvm::NodeAttrs &attrs,
+                          const OpContext &ctx,
+                          const std::vector<NDArray> &inputs,
+                          const std::vector<OpReqType> &req,
+                          const std::vector<NDArray> &outputs) {
+    CHECK_EQ (inputs.size(), 5U);
+#if MXNET_USE_MKLDNN == 1
+    if (SupportMKLDNN(inputs[0])) {
+        const BatchNormParam &param = nnvm::get<BatchNormParam>(attrs.parsed);
+        std::vector<NDArray> in_data(inputs.begin(), inputs.begin() + batchnorm::kInMovingMean);
+        std::vector<NDArray> aux_states(inputs.begin() + batchnorm::kInMovingMean, inputs.end());
+
+        switch (inputs[0].dtype()) {
+            case mshadow::kFloat32:
+                MKLDNNBatchNorm_Forward<float>(ctx, param, in_data, req, outputs, aux_states);
+                return;
+        }
+    }
+#endif
+    // cast NDArray to TBlob, and call original implementation.
+    std::vector<TBlob> in_blobs(inputs.size());
+    for (size_t i = 0; i < in_blobs.size(); i++) {
+        in_blobs[i] = inputs[i].data();
+    }
+
+    std::vector<TBlob> out_blobs(outputs.size());
+    for (size_t i = 0; i < out_blobs.size(); i++) {
+        out_blobs[i] = outputs[i].data();
+    }
+    BatchNormCompute<cpu>(attrs, ctx, in_blobs, req, out_blobs);
+}
+
+
+void BatchNormGradCompute_CPU(const nnvm::NodeAttrs &attrs,
+                              const OpContext &ctx,
+                              const std::vector<NDArray> &inputs,
+                              const std::vector<OpReqType> &req,
+                              const std::vector<NDArray> &outputs) {
+    CHECK_EQ (inputs.size(), 11U);
+#if MXNET_USE_MKLDNN == 1
+    if (SupportMKLDNN(inputs[0])) {
+        const BatchNormParam &param = nnvm::get<BatchNormParam>(attrs.parsed);
+        std::vector<NDArray> out_grad(inputs.begin(), inputs.begin() + (param.output_mean_var ? 3U : 1U));
+        std::vector<NDArray> in_data(inputs.begin() + 3U, inputs.begin() + 6U);
+        std::vector<NDArray> aux_states(inputs.begin() + 6U, inputs.begin() + 8U);
+        std::vector<NDArray> out_data(inputs.begin() + 8U, inputs.end());
+        std::vector<NDArray> in_grad(outputs.begin(), outputs.begin() + 3U);
+
+        switch (inputs[0].dtype()) {
+            case mshadow::kFloat32:
+                MKLDNNBatchNorm_Backward<float>(ctx, param, out_grad, in_data,
+                                                out_data, req, in_grad, aux_states);
+                return;
+        }
+    }
+#endif
+    // cast NDArray to TBlob, and call original implementation.
+    std::vector<TBlob> in_blobs(inputs.size());
+    for (size_t i = 0; i < in_blobs.size(); i++) {
+        in_blobs[i] = inputs[i].data();
+    }
+
+    std::vector<TBlob> out_blobs(outputs.size());
+    for (size_t i = 0; i < out_blobs.size(); i++) {
+        out_blobs[i] = outputs[i].data();
+    }
+    BatchNormCompute<cpu>(attrs, ctx, in_blobs, req, out_blobs);
+}
+
+
+inline static bool BatchNormStorageType(const nnvm::NodeAttrs &attrs,
+                                        const int dev_mask,
+                                        DispatchMode *dispatch_mode,
+                                        std::vector<int> *in_attrs,
+                                        std::vector<int> *out_attrs) {
+    CHECK_EQ(in_attrs->size(), 5);
+    CHECK_EQ(out_attrs->size(), 3);
+#if MXNET_USE_MKLDNN == 1
+    if (dev_mask == mshadow::cpu::kDevMask) {
+        *dispatch_mode = DispatchMode::kFComputeEx;
+
+        for (int& v : *in_attrs) {
+            if (v == - 1) v = kDefaultStorage;
+        }
+
+        for (int& v : *out_attrs) {
+            v = kMKLDNNStorage;
+        }
+        return true;
+    }
+#endif
+    *dispatch_mode = DispatchMode::kFComputeEx;
+    for (size_t i = 0; i < out_attrs->size(); i++) {
+        (*out_attrs)[i] = kDefaultStorage;
+    }
+    return true;
+}
+
+inline static bool backward_BatchNormStorageType(const nnvm::NodeAttrs &attrs,
+                                                 const int dev_mask,
+                                                 DispatchMode *dispatch_mode,
+                                                 std::vector<int> *in_attrs,
+                                                 std::vector<int> *out_attrs) {
+    CHECK_EQ(in_attrs->size(), 11);
+    CHECK_EQ(out_attrs->size(), 5);
+#if MXNET_USE_MKLDNN == 1
+    if (dev_mask == mshadow::cpu::kDevMask) {
+        *dispatch_mode = DispatchMode::kFComputeEx;
+      
+        for (int& v : *in_attrs) {
+            if (v == - 1) v = kDefaultStorage;
+        }
+
+        (*out_attrs)[0] = kMKLDNNStorage;
+        (*out_attrs)[1] = kDefaultStorage;
+        (*out_attrs)[2] = kDefaultStorage;
+        (*out_attrs)[3] = kDefaultStorage;
+        (*out_attrs)[4] = kDefaultStorage;
+
+        return true;
+    }
+#endif
+    *dispatch_mode = DispatchMode::kFComputeEx;
+    for (size_t i = 0; i < out_attrs->size(); i++) {
+        (*out_attrs)[i] = kDefaultStorage;
+    }
+    return true;
+}
+
 NNVM_REGISTER_OP(BatchNorm)
 .describe(R"code(Batch normalization.
 
@@ -446,7 +580,9 @@ then set ``gamma`` to 1 and its gradient to 0.
 })
 .set_attr<nnvm::FInferShape>("FInferShape", BatchNormShape)
 .set_attr<nnvm::FInferType>("FInferType", BatchNormType)
+.set_attr<FInferStorageType>("FInferStorageType", BatchNormStorageType)
 .set_attr<FCompute>("FCompute<cpu>", BatchNormCompute<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BatchNormCompute_CPU)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseInOut{"_backward_BatchNorm"})
 .add_argument("data", "NDArray-or-Symbol", "Input data to batch normalization")
 .add_argument("gamma", "NDArray-or-Symbol", "gamma array")
@@ -468,8 +604,10 @@ then set ``gamma`` to 1 and its gradient to 0.
 NNVM_REGISTER_OP(_backward_BatchNorm)
 .set_num_outputs(5)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
+.set_attr<FInferStorageType>("FInferStorageType", backward_BatchNormStorageType)
 .set_attr_parser(ParamParser<BatchNormParam>)
-.set_attr<FCompute>("FCompute<cpu>", BatchNormGradCompute<cpu>);
+.set_attr<FCompute>("FCompute<cpu>", BatchNormGradCompute<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BatchNormGradCompute_CPU);
 
 }  // namespace op
 }  // namespace mxnet
