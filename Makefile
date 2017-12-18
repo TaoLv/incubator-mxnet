@@ -124,6 +124,10 @@ ifeq ($(USE_MKLDNN), 1)
 	LDFLAGS += -L$(MKLDNNROOT)/lib -lmkldnn
 endif
 
+ifeq ($(BN_DEBUG), 1)
+	CFLAGS += -DMXNET_BN_DEBUG=1
+endif
+
 ifeq ($(USE_OPERATOR_TUNING), 1)
 	CFLAGS += -DMXNET_USE_OPERATOR_TUNING=1
 endif
