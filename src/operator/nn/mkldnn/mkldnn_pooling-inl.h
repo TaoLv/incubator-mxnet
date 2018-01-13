@@ -186,7 +186,7 @@ GetMKLDNNPoolAlgo(const PoolingParam &param) {
       return mkldnn::algorithm::pooling_max;
       break;
     case pool_enum::kAvgPooling:
-      return mkldnn::algorithm::pooling_avg_include_padding;
+      return algorithm::pooling_avg_include_padding;
       break;
     default:
       LOG(FATAL) << "MKLDNN Pooling: Unknown pooling method.";
