@@ -405,6 +405,12 @@ static inline bool SupportMKLDNNBN(const NDArray &input, const BatchNormParam &p
   bool support = SupportMKLDNN(input) && shape.ndim() == 4
       && param.axis == mxnet::op::batchnorm::DEFAULT_AXIS
       && shape[param.axis] % 8 == 0;
+
+  // auto mem = input.GetMKLDNNData();
+  // auto desc = mem->get_primitive_desc().desc();
+  // std::cout << "bn desc " << desc.data.format << std::endl;
+  // std::cout << "bn input " << &input << std::endl;
+  /*
   if (support) {
     // We need to test its data layout. MKLDNN batchnorm doesn't work well on
     // the default layout.
@@ -412,6 +418,7 @@ static inline bool SupportMKLDNNBN(const NDArray &input, const BatchNormParam &p
     auto desc = mem->get_primitive_desc().desc();
     support = desc.data.format != GetDefaultFormat(desc);
   }
+  */
   return support;
 }
 #endif

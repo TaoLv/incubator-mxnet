@@ -621,8 +621,8 @@ mkldnn::memory *NDArray::CreateMKLDNNData(const mkldnn::memory::primitive_desc &
   CHECK(!IsView());
   auto required_format = _desc.desc().data.format;
   auto def_format = GetDefaultFormat(_desc.desc());
-  if (required_format != def_format)
-    return nullptr;
+  // if (required_format != def_format)
+  //   return nullptr;
 
   if (desc.get_size() != shape().Size() * GetTypeSize(dtype_)) {
     LOG(FATAL) << "The size of NDArray doesn't match the requested MKLDNN memory desc";

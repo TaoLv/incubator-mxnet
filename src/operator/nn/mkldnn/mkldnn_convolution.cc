@@ -269,6 +269,7 @@ void MKLDNNConvolutionForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx
   auto data_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
   auto weight_mem = GetWeights(in_data[conv::kWeight], fwd.fwd_pd.weights_primitive_desc(),
                                param.num_group);
+  if (req[conv::kOut] == kAddTo) {
   auto out_mem = CreateMKLDNNMem(out_data[conv::kOut], fwd.fwd_pd.dst_primitive_desc(),
                                  req[conv::kOut]);
   const mkldnn::memory *bias_mem = nullptr;
@@ -276,9 +277,21 @@ void MKLDNNConvolutionForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx
     bias_mem = in_data[conv::kBias].GetMKLDNNDataReorder(fwd.fwd_pd.bias_primitive_desc());
   fwd.SetNewMem(*data_mem, *weight_mem, bias_mem, *out_mem.second);
   MKLDNNStream::Get()->RegisterPrim(fwd.GetFwd());
-
   CommitOutput(out_data[conv::kOut], out_mem);
   MKLDNNStream::Get()->Submit();
+
+  } else {
+    auto out = out_data[conv::kOut];
+    auto out_mem = const_cast<NDArray &>(out).CreateMKLDNNData(fwd.fwd_pd.dst_primitive_desc());
+    // std::cout << out_mem->get_primitive_desc().desc().data.format << std::endl;
+    const mkldnn::memory *bias_mem = nullptr;
+    if (!param.no_bias)
+      bias_mem = in_data[conv::kBias].GetMKLDNNDataReorder(fwd.fwd_pd.bias_primitive_desc());
+    fwd.SetNewMem(*data_mem, *weight_mem, bias_mem, *out_mem);
+    MKLDNNStream::Get()->RegisterPrim(fwd.GetFwd());
+    MKLDNNStream::Get()->Submit();
+    // std::cout << "conv: " << &out << std::endl;
+  }
 }
 
 void MKLDNNConvolutionBackward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
