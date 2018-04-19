@@ -408,6 +408,10 @@ void NDArray::Chunk::SetMKLMem(const TShape &shape, int dtype) {
     return;
   }
 
+  if (mkl_mem_) {
+    Reorder2Default();
+  }
+
   mkldnn::memory::dims dims;
   // These are shapes supprted by MKLDNN.
   if (shape.ndim() == 1 || shape.ndim() == 2 || shape.ndim() == 4
