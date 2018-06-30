@@ -424,6 +424,14 @@ void ConvolutionGradCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+#if MXNET_USE_MKLDNN == 1
+void ConvolutionComputeExCPU(const nnvm::NodeAttrs& attrs,
+                             const OpContext& ctx,
+                             const std::vector<NDArray>& inputs,
+                             const std::vector<OpReqType>& req,
+                             const std::vector<NDArray>& outputs);
+#endif
+
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_OPERATOR_NN_CONVOLUTION_INL_H_

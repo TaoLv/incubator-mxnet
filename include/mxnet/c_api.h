@@ -1462,6 +1462,9 @@ MXNET_DLL int MXPartitionGraph(SymbolHandle sym_handle,
                                const char** op_names,
                                SymbolHandle* ret_sym_handle);
 
+MXNET_DLL int MXPartitionConvBN(SymbolHandle sym_handle,
+                                SymbolHandle* ret_sym_handle);
+
 //--------------------------------------------
 // Part 4: Executor interface
 //--------------------------------------------

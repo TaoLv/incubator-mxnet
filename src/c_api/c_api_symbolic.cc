@@ -32,6 +32,7 @@
 #include "../operator/operator_common.h"
 #include "../executor/exec_pass.h"
 #include "../operator/subgraph/default_subgraph_op.h"
+#include "../operator/subgraph/mkldnn/mkldnn_conv_bn.h"
 
 namespace mxnet {
 namespace op {
@@ -641,10 +642,26 @@ int MXPartitionGraph(SymbolHandle sym_handle,
   *s = sym->Copy();
   nnvm::Graph g = Symbol2Graph(*s);
   if (!op_name_set.empty()) {
-    mxnet::op::SubgraphPropertyPtr property
-        = std::make_shared<mxnet::op::DefaultSubgraphProperty>(op_name_set);
+    mxnet::op::sg::SubgraphPropertyPtr property
+        = std::make_shared<mxnet::op::sg::DefaultSubgraphProperty>(op_name_set);
     g.attrs["subgraph_property"] = std::make_shared<nnvm::any>(std::move(property));
   }
+  g = ApplyPass(std::move(g), "PartitionGraph");
+  s->outputs = g.outputs;
+  *ret_sym_handle = s;
+  API_END_HANDLE_ERROR(delete s);
+}
+
+int MXPartitionConvBN(SymbolHandle sym_handle,
+                           SymbolHandle *ret_sym_handle) {
+  nnvm::Symbol *s = new nnvm::Symbol();
+  API_BEGIN();
+  nnvm::Symbol *sym = static_cast<nnvm::Symbol *>(sym_handle);
+  *s = sym->Copy();
+  nnvm::Graph g = Symbol2Graph(*s);
+  mxnet::op::sg::SubgraphPropertyPtr property =
+      std::make_shared<mxnet::op::sg::SGConvBNProperty>();
+  g.attrs["subgraph_property"] = std::make_shared<nnvm::any>(std::move(property));
   g = ApplyPass(std::move(g), "PartitionGraph");
   s->outputs = g.outputs;
   *ret_sym_handle = s;

@@ -49,7 +49,7 @@ static inline std::vector<std::string> ListArguments(const ConvolutionParam& par
 }
 
 #if MXNET_USE_MKLDNN == 1
-static void ConvolutionComputeExCPU(const nnvm::NodeAttrs& attrs,
+void ConvolutionComputeExCPU(const nnvm::NodeAttrs& attrs,
                                     const OpContext& ctx,
                                     const std::vector<NDArray>& inputs,
                                     const std::vector<OpReqType>& req,

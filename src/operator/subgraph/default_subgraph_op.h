@@ -26,7 +26,7 @@
 
 namespace mxnet {
 namespace op {
-
+namespace sg {
 /*
  * This provides criteria for selecting nodes in a subgraph.
  * When a node is passed to this object, the selection criteria may be changed.
@@ -65,7 +65,12 @@ class SubgraphProperty {
   // create an nnvm node for a given subgraph. Here users can customize how to
   // execute the operators in the subgraph.
   virtual nnvm::NodePtr CreateSubgraphNode(const nnvm::Symbol &s,
+                                           const std::vector<SimpleNode *> &subgraph_nodes,
                                            const int subgraph_id = 0) const = 0;
+  /*
+  virtual void ConnectSubgraphOutput(const nnvm::NodePtr n,
+                                     const std::vector<nnvm::NodeEntry> *output_entries) const = 0;
+                                     */
 };
 
 using SubgraphPropertyPtr = std::shared_ptr<SubgraphProperty>;
@@ -106,6 +111,7 @@ class DefaultSubgraphProperty: public SubgraphProperty {
   explicit DefaultSubgraphProperty(const std::unordered_set<std::string> &op_names) :
     op_names_(std::make_shared<std::unordered_set<std::string>>(op_names)) {}
   virtual nnvm::NodePtr CreateSubgraphNode(const nnvm::Symbol &sym,
+                                           const std::vector<SimpleNode *> &subgraph_nodes,
                                            const int subgraph_id = 0) const {
     nnvm::NodePtr n = nnvm::Node::Create();
     n->attrs.op = Op::Get("_default_subgraph_op");
@@ -113,14 +119,23 @@ class DefaultSubgraphProperty: public SubgraphProperty {
     n->attrs.parsed = sym;
     return n;
   }
+
   virtual SubgraphSelectorPtr CreateSubgraphSelector() const {
     return std::make_shared<ContainOpSelector>(op_names_);
   }
-
+/*
+  void ConnectSubgraphOutput(const nnvm::NodePtr n,
+                             const std::vector<nnvm::NodeEntry> *output_entries) const override {
+    for (size_t i = 0; i < output_entries->size(); ++i) {
+      (*output_entries)[i] = nnvm::NodeEntry{n, static_cast<uint32_t>(i), 0};
+    }
+  }
+*/
  private:
   std::shared_ptr<const std::unordered_set<std::string>> op_names_;
 };
 
+}  // namespace sg
 }  // namespace op
 }  // namespace mxnet
 

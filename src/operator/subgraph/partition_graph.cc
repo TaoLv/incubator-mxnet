@@ -566,7 +566,7 @@ void CreateSubgraphNode(Graph* g,
     sym.outputs[i] = *output_entries[i];
   }
   const SubgraphPropertyPtr& subg_prop = g->GetAttr<SubgraphPropertyPtr>("subgraph_property");
-  nnvm::NodePtr n = subg_prop->CreateSubgraphNode(sym, subgraph_id);
+  nnvm::NodePtr n = subg_prop->CreateSubgraphNode(sym, subgraph_nodes, subgraph_id);
 
   // Connect the external nodes to the subgraph node.
   for (size_t i = 0; i < output_entries.size(); ++i) {
