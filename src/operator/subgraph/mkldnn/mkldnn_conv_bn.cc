@@ -31,7 +31,7 @@ namespace op {
 #define SUBGRAPH_DEBUG 0
 
 template<typename DType>
-void UpdateConvWeightBias(const NDArray &weight, const NDArray bias,
+void UpdateConvWeightBias(const NDArray &weight, const NDArray* bias,
                           const NDArray &gamma, const NDArray &beta, const NDArray &variance,
                           std::shared_ptr<NDArray> update_weight,
                           std::shared_ptr<NDArray> update_bias,
@@ -48,13 +48,17 @@ void UpdateConvWeightBias(const NDArray &weight, const NDArray bias,
   printf("bn param axis: %d \n", param.axis);
 #endif
   DType* weight_ptr = weight.data().dptr<DType>();
-  DType* bias_ptr   = bias.data().dptr<DType>();
+  DType* bias_ptr = nullptr;
+  DType* update_bias_ptr = nullptr;
+  if (bias) {
+    bias_ptr = bias->data().dptr<DType>();
+    update_bias_ptr = update_bias->data().dptr<DType>();
+  }
   DType* gamma_ptr  = gamma.data().dptr<DType>();
   DType* beta_ptr   = beta.data().dptr<DType>();
   DType* var_ptr    = variance.data().dptr<DType>();
 
   DType* update_weight_ptr = update_weight->data().dptr<DType>();
-  DType* update_bias_ptr   = update_bias->data().dptr<DType>();
 
   size_t channel = gamma.shape()[0];
   size_t offset = weight.shape()[1] * weight.shape()[2] * weight.shape()[3];
@@ -64,7 +68,11 @@ void UpdateConvWeightBias(const NDArray &weight, const NDArray bias,
     DType* p2 = reinterpret_cast<DType*>(update_weight_ptr + c * offset);
     DType alpha = (param.fix_gamma ? static_cast<DType>(1.0f) : gamma_ptr[c]) /
         sqrt(var_ptr[c] + param.eps);
-    update_bias_ptr[c] = alpha * bias_ptr[c] + beta_ptr[c];
+
+    if (bias_ptr && update_bias_ptr) {
+      update_bias_ptr[c] = alpha * bias_ptr[c] + beta_ptr[c];
+    }
+
     for (size_t k = 0; k < offset; ++k) {
       p2[k] = p1[k] * alpha;
     }
@@ -117,12 +125,13 @@ void ConvBNSubgraphOperator::Forward(const OpContext &ctx,
                                      const std::vector<NDArray> &inputs,
                                      const std::vector<OpReqType> &req,
                                      const std::vector<NDArray> &outputs) {
+
+  const BatchNormParam &bn_param = nnvm::get<BatchNormParam>(bn_attrs_.parsed);
+  const ConvolutionParam &conv_param = nnvm::get<ConvolutionParam>(conv_attrs_.parsed);
 #if SUBGRAPH_DEBUG
   LOG(INFO) << "ConvBN inputs size: " << inputs.size();
   LOG(INFO) << "ConvBN outputs size: " << outputs.size();
   LOG(INFO) << "ConvBN req size: " << req.size();
-  CHECK_EQ(inputs.size(), 7U);
-  CHECK_EQ(ctx.is_train, false);
   for (size_t k = 0; k < inputs.size(); ++k) {
     auto input = inputs[k];
     printf("input %ld :", k);
@@ -131,51 +140,68 @@ void ConvBNSubgraphOperator::Forward(const OpContext &ctx,
     }
     printf("\n");
   }
+  CHECK_EQ(ctx.is_train, false);
+  printf("output:");
+    for (size_t i = 0; i < outputs[0].shape().ndim(); ++i) {
+      printf("%ld ", outputs[0].shape()[i]);
+    }
+    printf("\n");
 #endif
 
-  NDArray conv_data   = inputs[0];
-  NDArray conv_weight = inputs[1];
-  NDArray conv_bias   = inputs[2];
-
-  NDArray bn_gamma    = inputs[3];
-  NDArray bn_beta     = inputs[4];
-  NDArray bn_mean     = inputs[5];
-  NDArray bn_var      = inputs[6];
-
-  NDArray output      = outputs[0];
+  CHECK_EQ(inputs.size(), conv_param.no_bias ? 6U : 7U);
+  NDArray output = outputs[0];
 
   // CHECK(!conv_weight.IsMKLDNN());
-  CHECK_EQ(bn_gamma.shape()[0], conv_weight.shape()[0]);
+  CHECK_EQ(inputs[3].shape()[0], inputs[2].shape()[0]);
 
   if (nullptr == cached_weight_ || nullptr == cached_bias_) {
-    cached_weight_.reset(new NDArray(conv_weight.storage_type(),
-                                     conv_weight.shape(),
-                                     conv_weight.ctx(),
+    cached_weight_.reset(new NDArray(inputs[1].storage_type(),
+                                     inputs[1].shape(),
+                                     inputs[1].ctx(),
                                      true,
-                                     conv_weight.dtype()));
-    cached_bias_.reset(new NDArray(conv_bias.storage_type(),
-                                   conv_bias.shape(),
-                                   conv_bias.ctx(),
-                                   true,
-                                   conv_bias.dtype()));
-
-    const BatchNormParam &param = nnvm::get<BatchNormParam>(bn_attrs_.parsed);
-    MSHADOW_REAL_TYPE_SWITCH(conv_weight.dtype(), DType, {
-        UpdateConvWeightBias<DType>(conv_weight, conv_bias, bn_gamma, bn_beta, bn_var,
-                                    cached_weight_, cached_bias_, param);
-    });
+                                     inputs[1].dtype()));
+    if (!conv_param.no_bias) {
+      cached_bias_.reset(new NDArray(inputs[2].storage_type(),
+                                     inputs[2].shape(),
+                                     inputs[2].ctx(),
+                                     true,
+                                     inputs[2].dtype()));
+      MSHADOW_REAL_TYPE_SWITCH(inputs[1].dtype(), DType, {
+          UpdateConvWeightBias<DType>(inputs[1], &(inputs[2]), inputs[3], inputs[4], inputs[6],
+                                      cached_weight_, cached_bias_, bn_param);
+      });
+    } else {
+      MSHADOW_REAL_TYPE_SWITCH(inputs[1].dtype(), DType, {
+          UpdateConvWeightBias<DType>(inputs[1], nullptr, inputs[2], inputs[3], inputs[5],
+                                      cached_weight_, cached_bias_, bn_param);
+      });
+    }
   }
+  if (!conv_param.no_bias) {
 #if MXNET_USE_MKLDNN == 1
-  ConvolutionComputeExCPU(conv_attrs_, ctx,
-                          {conv_data, *cached_weight_, *cached_bias_},
-                          {req[0]},
-                          {output});
+    ConvolutionComputeExCPU(conv_attrs_, ctx,
+                            {inputs[0], *cached_weight_, *cached_bias_},
+                            {req[0]},
+                            {output});
 #else
-  ConvolutionCompute<cpu>(conv_attrs_, ctx,
-                          {conv_data.data(), cached_weight_->data(), cached_bias_->data()},
-                          {req[0]},
-                          {output.data()});
+    ConvolutionCompute<cpu>(conv_attrs_, ctx,
+                            {inputs[0].data(), cached_weight_->data(), cached_bias_->data()},
+                            {req[0]},
+                            {output.data()});
 #endif
+  } else {
+#if MXNET_USE_MKLDNN == 1
+    ConvolutionComputeExCPU(conv_attrs_, ctx,
+                            {inputs[0], *cached_weight_},
+                            {req[0]},
+                            {output});
+#else
+    ConvolutionCompute<cpu>(conv_attrs_, ctx,
+                            {inputs[0].data(), cached_weight_->data()},
+                            {req[0]},
+                            {output.data()});
+#endif
+  }
 }
 
 OpStatePtr CreateConvBNSubgraphOpState(const NodeAttrs &attrs,
@@ -185,6 +211,7 @@ OpStatePtr CreateConvBNSubgraphOpState(const NodeAttrs &attrs,
   const Symbol &subgraph_sym = nnvm::get<Symbol>(attrs.parsed);
   return OpStatePtr::Create<ConvBNSubgraphOperator>(subgraph_sym);
 }
+
 
 void ConvBNSubgraphOpForward(const OpStatePtr &state_ptr,
                              const OpContext &ctx,
