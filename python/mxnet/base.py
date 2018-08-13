@@ -22,11 +22,11 @@ from __future__ import absolute_import
 
 import atexit
 import ctypes
-import inspect
 import os
 import sys
 import warnings
-
+import inspect
+import platform
 import numpy as np
 
 from . import libinfo
@@ -57,6 +57,26 @@ if sys.version_info[0] > 2:
     py_str = lambda x: x.decode('utf-8')
 else:
     py_str = lambda x: x
+
+
+def data_dir_default():
+    """
+
+    :return: default data directory depending on the platform and environment variables
+    """
+    system = platform.system()
+    if system == 'Windows':
+        return os.path.join(os.environ.get('APPDATA'), 'mxnet')
+    else:
+        return os.path.join(os.path.expanduser("~"), '.mxnet')
+
+
+def data_dir():
+    """
+
+    :return: data directory in the filesystem for storage, for example when downloading models
+    """
+    return os.getenv('MXNET_HOME', data_dir_default())
 
 
 class _NullType(object):
@@ -709,3 +729,19 @@ def _generate_op_module_signature(root_namespace, module_name, op_code_gen_func)
     module_op_file.close()
     write_all_str(module_internal_file, module_internal_all)
     module_internal_file.close()
+
+def cint(init_val=0):
+    """create a C int with an optional initial value"""
+    return C.c_int(init_val)
+
+def int_addr(x):
+    """given a c_int, return it's address as an int ptr"""
+    x_addr = C.addressof(x)
+    int_p = C.POINTER(C.c_int)
+    x_int_addr = C.cast(x_addr, int_p)
+    return x_int_addr
+
+def checked_call(f, *args):
+    """call a cuda function and check for success"""
+    error_t = f(*args)
+    assert error_t == 0, "Failing cuda call %s returns %s." % (f.__name__, error_t)

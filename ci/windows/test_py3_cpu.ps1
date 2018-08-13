@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -17,17 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# build and install are separated so changes to build don't invalidate
-# the whole docker cache for the image
-
-set -ex
-# install libraries for mxnet's python package on ubuntu
-apt-get install -y python-dev python3-dev virtualenv
-
-# the version of the pip shipped with ubuntu may be too lower, install a recent version here
-wget -nv https://bootstrap.pypa.io/get-pip.py
-python3 get-pip.py
-python2 get-pip.py
-
-pip2 install nose cpplint==1.3.0 pylint==1.8.3 'numpy<1.15.0,>=1.8.2' nose-timer 'requests<2.19.0,>=2.18.4' h5py==2.8.0rc1 scipy==1.0.1
-pip3 install nose cpplint==1.3.0 pylint==1.8.3 'numpy<1.15.0,>=1.8.2' nose-timer 'requests<2.19.0,>=2.18.4' h5py==2.8.0rc1 scipy==1.0.1
+7z x -y windows_package.7z
+$env:MXNET_LIBRARY_PATH=join-path $pwd.Path windows_package\lib\libmxnet.dll
+$env:PYTHONPATH=join-path $pwd.Path windows_package\python
+$env:MXNET_STORAGE_FALLBACK_LOG_VERBOSE=0
+c:\Anaconda3\envs\py3\Scripts\pip install -r tests\requirements.txt
+c:\Anaconda3\envs\py3\python.exe -m nose -v --with-xunit --xunit-file nosetests_unittest.xml tests\python\unittest
+if (! $?) { Throw ("Error running unittest") }
+c:\Anaconda3\envs\py3\python.exe -m nose -v --with-xunit --xunit-file nosetests_train.xml tests\python\train
+if (! $?) { Throw ("Error running train tests") }
