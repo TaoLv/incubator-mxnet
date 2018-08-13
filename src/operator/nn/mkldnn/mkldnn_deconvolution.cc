@@ -73,6 +73,15 @@ static mkldnn::convolution_backward_data::primitive_desc GetDeconvFwdImpl(
   auto weight_md = GetWeightDesc(weights, param.num_group);
   auto out_md = GetMemDesc(output);
   auto engine = CpuEngine::Get()->get_engine();
+
+  auto IC = weights.shape()[1];
+  auto OC = weights.shape()[0];
+
+  if (IC % 16 != 0 || OC % 16 != 0) {
+    data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
+    weight_md = GetWeightDesc(weights, param.num_group, mkldnn::memory::format::oihw);
+  }
+
   CHECK_GE(param.stride.ndim(), 2U);
   CHECK_GE(param.pad.ndim(), 2U);
   CHECK_GE(param.dilate.ndim(), 2U);
@@ -100,6 +109,15 @@ static mkldnn::convolution_forward::primitive_desc GetDeconvBwdData(
   auto weight_md = GetWeightDesc(weights, param.num_group);
   auto out_md = GetMemDesc(output);
   auto engine = CpuEngine::Get()->get_engine();
+
+  auto IC = weights.shape()[1];
+  auto OC = weights.shape()[0];
+
+  if (IC % 16 != 0 || OC % 16 != 0) {
+    data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
+    weight_md = GetWeightDesc(weights, param.num_group, mkldnn::memory::format::oihw);
+  }
+
   CHECK_GE(param.stride.ndim(), 2U);
   CHECK_GE(param.pad.ndim(), 2U);
   CHECK_GE(param.dilate.ndim(), 2U);
@@ -124,6 +142,15 @@ static mkldnn::convolution_backward_weights::primitive_desc GetDeconvBwdWeights(
   auto weight_md = GetWeightDesc(weights, param.num_group);
   auto out_md = GetMemDesc(output);
   auto engine = CpuEngine::Get()->get_engine();
+
+  auto IC = weights.shape()[1];
+  auto OC = weights.shape()[0];
+
+  if (IC % 16 != 0 || OC % 16 != 0) {
+    data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
+    weight_md = GetWeightDesc(weights, param.num_group, mkldnn::memory::format::oihw);
+  }
+
   CHECK_GE(param.stride.ndim(), 2U);
   CHECK_GE(param.pad.ndim(), 2U);
   CHECK_GE(param.dilate.ndim(), 2U);

@@ -188,8 +188,37 @@ inline static mkldnn::memory::desc GetMemDesc(const NDArray &arr, int ndim) {
                               mkldnn::memory::format::any};
 }
 
+inline static mkldnn::memory::desc GetMemDesc(const NDArray &arr,
+                                              int ndim,
+                                              mkldnn::memory::format fmt) {
+  mkldnn::memory::dims dims(ndim);
+  for (size_t i = 0; i < dims.size(); i++) dims[i] = arr.shape()[i];
+  return mkldnn::memory::desc{dims, get_mkldnn_type(arr.dtype()), fmt};
+}
+
 inline static mkldnn::memory::desc GetMemDesc(const NDArray &arr) {
   return GetMemDesc(arr, arr.shape().ndim());
+}
+
+inline static mkldnn::memory::desc GetMemDesc(const NDArray &arr,
+                                              mkldnn::memory::format fmt) {
+  return GetMemDesc(arr, arr.shape().ndim(), fmt);
+}
+
+inline static mkldnn::memory::desc GetWeightDesc(const NDArray &arr,
+                                                 int num_groups,
+                                                 mkldnn::memory::format fmt) {
+  if (num_groups == 1) {
+    return GetMemDesc(arr, fmt);
+  } else {
+    CHECK_EQ(arr.shape().ndim(), 4U);
+    mkldnn::memory::dims tz = mkldnn::memory::dims{ num_groups,
+      static_cast<int>(arr.shape()[0] / num_groups),
+      static_cast<int>(arr.shape()[1]),
+      static_cast<int>(arr.shape()[2]),
+      static_cast<int>(arr.shape()[3])};
+    return mkldnn::memory::desc{tz, get_mkldnn_type(arr.dtype()), fmt};
+  }
 }
 
 inline static mkldnn::memory::desc GetWeightDesc(const NDArray &arr,
