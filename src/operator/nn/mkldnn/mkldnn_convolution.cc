@@ -41,7 +41,7 @@ bool SupportMKLDNNConv(const ConvolutionParam& params, const NDArray &input) {
 }
 
 mkldnn::convolution_forward::primitive_desc GetConvFwdImpl_train(const ConvolutionParam &param,
-                                                                 const bool is_train,        
+                                                                 const bool is_train,
                                                                  const NDArray &data,
                                                                  const NDArray &weights,
                                                                  const NDArray *bias,
@@ -69,8 +69,8 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl_train(const Convoluti
   if ((IC % 16 != 0 && IC > 16) || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
 
@@ -133,7 +133,7 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
     weight_md = GetWeightDesc(weights, param.num_group, mkldnn::memory::format::oihw);
   }*/
 
-  if ((IC % 16 != 0 && IC > 3 ) || OC % 16 != 0) {
+  if ((IC % 16 != 0 && IC > 3) || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     /*
     printf("weights: %d %d %d %d, %d \n", weights.shape()[0], weights.shape()[1],
@@ -141,8 +141,8 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
                                       param.num_group);
                                       */
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);
@@ -173,10 +173,14 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
           data_md, weight_md, out_md, strides, dilates, padding, padding,
           mkldnn::padding_kind::zero);
       auto conv_pd = mkldnn::convolution_forward::primitive_desc(desc, engine);
-      CHECK_EQ(data.shape()[0]*data.shape()[1]*data.shape()[2]*data.shape()[3]*sizeof(float), conv_pd.src_primitive_desc().get_size()) << ": " << data.shape()[0] << ", " << data.shape()[1] << ", " << data.shape()[2] << ", " << data.shape()[3] << ", " << conv_pd.src_primitive_desc().desc().data.format;
-      CHECK_EQ(weights.shape()[0]*weights.shape()[1]*weights.shape()[2]*weights.shape()[3]*sizeof(float), conv_pd.weights_primitive_desc().get_size());
-      CHECK_EQ(output.shape()[0]*output.shape()[1]*output.shape()[2]*output.shape()[3]*sizeof(float), conv_pd.dst_primitive_desc().get_size());
-
+      CHECK_EQ(data.shape()[0]*data.shape()[1]*data.shape()[2]*data.shape()[3]*sizeof(float),
+          conv_pd.src_primitive_desc().get_size()) << ": " << data.shape()[0] << ", "
+          << data.shape()[1] << ", " << data.shape()[2] << ", " << data.shape()[3] << ", "
+          << conv_pd.src_primitive_desc().desc().data.format;
+      CHECK_EQ(weights.shape()[0] * weights.shape()[1] * weights.shape()[2] * weights.shape()[3] *
+               sizeof(float), conv_pd.weights_primitive_desc().get_size());
+      CHECK_EQ(output.shape()[0] * output.shape()[1] * output.shape()[2] * output.shape()[3] *
+               sizeof(float), conv_pd.dst_primitive_desc().get_size());
       return conv_pd;
     } else {
       auto bias_md = GetMemDesc(*bias);
@@ -211,8 +215,8 @@ static mkldnn::convolution_backward_data::primitive_desc GetConvBwdData(
   if ((IC % 16 != 0) || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);
@@ -262,8 +266,8 @@ static mkldnn::convolution_backward_weights::primitive_desc GetConvBwdWeights(
   if ((IC % 16 != 0 && IC > 16) || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);

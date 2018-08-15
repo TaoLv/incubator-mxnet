@@ -85,7 +85,8 @@ static mkldnn::convolution_backward_data::primitive_desc GetDeconvFwdImpl(
                                              param.num_group);
     */
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);
@@ -122,8 +123,8 @@ static mkldnn::convolution_forward::primitive_desc GetDeconvBwdData(
   if (IC % 16 != 0 || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);
@@ -157,8 +158,8 @@ static mkldnn::convolution_backward_weights::primitive_desc GetDeconvBwdWeights(
   if (IC % 16 != 0 || OC % 16 != 0) {
     data_md = GetMemDesc(data, mkldnn::memory::format::nchw);
     weight_md = GetWeightDesc(weights, param.num_group,
-                              param.num_group == 1 ? mkldnn::memory::format::oihw : mkldnn::memory::format::goihw);
-
+                              param.num_group == 1 ? mkldnn::memory::format::oihw :
+                              mkldnn::memory::format::goihw);
   }
 
   CHECK_GE(param.stride.ndim(), 2U);
