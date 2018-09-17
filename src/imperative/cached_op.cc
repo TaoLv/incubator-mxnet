@@ -303,7 +303,9 @@ bool CachedOp::SetForwardGraph(
   const auto& stypes = g.GetAttr<StorageTypeVector>("storage_type");
   CHECK_EQ(stypes.size(), storage.size());
   for (size_t i = 0; i < stypes.size(); i++) {
-    if (stypes[i] != kDefaultStorage) storage[i] = exec::kDynamicStorageID;
+    if (stypes[i] != kDefaultStorage || config_.disable_memory_planning) {
+      storage[i] = exec::kDynamicStorageID;
+    }
   }
   for (const auto i : idx.input_nodes()) {
     storage[idx.entry_id(i, 0)] = exec::kExternalStorageID;

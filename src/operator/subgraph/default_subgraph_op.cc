@@ -31,7 +31,8 @@ class DefaultSubgraphOperator {
  public:
   explicit DefaultSubgraphOperator(const Symbol& sym) : subgraph_sym_(sym) {
     subgraph_exec_.reset(new CachedOp(sym, {{"static_alloc", "true"},
-                                            {"static_shape", "true"}}));
+                                            {"static_shape", "true"},
+                                            {"disable_memory_planning", "true"}}));
   }
 
   void Forward(const OpContext& ctx,

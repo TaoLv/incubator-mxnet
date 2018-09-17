@@ -35,9 +35,13 @@ struct CachedOpConfig : public dmlc::Parameter<CachedOpConfig> {
   uint32_t backward_bulk_size;
   bool static_alloc;
   bool static_shape;
+  bool disable_memory_planning;
   nnvm::Tuple<uint32_t> data_indices;
   nnvm::Tuple<uint32_t> param_indices;
   DMLC_DECLARE_PARAMETER(CachedOpConfig) {
+    DMLC_DECLARE_FIELD(disable_memory_planning)
+    .set_default(false)
+    .describe("Disable memory planning. Memory usage may increase.");
     DMLC_DECLARE_FIELD(static_alloc)
     .set_default(false)
     .describe("Statically allocate memory to improve speed. "
