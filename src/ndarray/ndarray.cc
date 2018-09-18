@@ -358,7 +358,6 @@ void NDArray::Chunk::Reorder2Default() {
   mkldnn_mem_ptr def_mem(new mkldnn::memory(def_pd));
   mkl_mem_->ReorderTo(def_mem.get());
 
-  CHECK(shandle.size >= def_pd.get_size());
   CheckAndAlloc(def_pd.get_size());
   // TODO(zhengda) We need to avoid memory copy here.
   memcpy(shandle.dptr, def_mem->get_data_handle(), def_pd.get_size());
@@ -396,7 +395,6 @@ void NDArray::Chunk::MKLDNNDataReorder(const mkldnn::memory::primitive_desc &pd)
   net.push_back(mkldnn::reorder(*old_mem, *new_mem));
   mkldnn::stream(mkldnn::stream::kind::eager).submit(net).wait();
 
-  CHECK(shandle.size >= pd.get_size());
   CheckAndAlloc(pd.get_size());
   // TODO(zhengda) We need to avoid memory copy here.
   memcpy(shandle.dptr, new_mem->get_data_handle(), pd.get_size());
@@ -628,8 +626,6 @@ void NDArray::CopyFrom(const mkldnn::memory &mem) {
   if (ptr_->mkl_mem_ && ptr_->mkl_mem_->GetRaw() == &mem)
     return;
 
-  CHECK(mem.get_primitive_desc().get_size() == shape().Size() * GetTypeSize(dtype_))
-      << "The size of NDArray doesn't match the requested MKLDNN memory desc";
   // If this array uses MKLDNN layout, we have to make sure it's not a view.
   // Otherwise, we'll have to change the layout inside the array.
 
@@ -675,7 +671,6 @@ mkldnn::memory *NDArray::CreateMKLDNNData(const mkldnn::memory::primitive_desc &
     return GetMKLDNNExact(ptr_->mkl_mem_->GetRaw(), desc);
   }
 
-  CHECK(ptr_->shandle.size >= desc.get_size());
   ptr_->CheckAndAlloc(desc.get_size());
   ptr_->mkl_mem_.reset(new MKLDNNMemory(desc, ptr_->shandle.dptr));
   MKLDNNStream::Get()->RegisterMem(ptr_->mkl_mem_->GetMem());
