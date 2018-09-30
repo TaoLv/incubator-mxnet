@@ -16,8 +16,8 @@
 # under the License.
 
 ifeq ($(USE_MKLDNN), 1)
-	MKLDNN_SUBMODDIR = $(ROOTDIR)/3rdparty/mkldnn
-	MKLDNN_BUILDDIR = $(MKLDNN_SUBMODDIR)/build
+	MKLDNN_SUBMODDIR = /home/lvtao/Workspace/mkl-dnn-prv
+	MKLDNN_BUILDDIR = /home/lvtao/Workspace/mkl-dnn-prv
 	MXNET_LIBDIR = $(ROOTDIR)/lib
 ifeq ($(UNAME_S), Darwin)
 	OMP_LIBFILE = $(MKLDNNROOT)/lib/libiomp5.dylib

@@ -297,6 +297,19 @@ class NDArray {
   bool fresh_out_grad() const;
   /*! \return updated grad state in entry_ */
   void set_fresh_out_grad(bool state) const;
+
+  inline size_t storage_size() const {
+    CHECK(!is_none());
+    auto stype = storage_type();
+    CHECK_EQ(stype, kDefaultStorage)
+        << "storage_size is not intend for other storage types except kDefaultStorage: " << stype;
+
+    if (ptr_->shandle.dptr == nullptr || ptr_->shandle.size == 0)
+        return 0;
+    else
+        return ptr_->shandle.size;
+  }
+
   /*! \brief Returns true if a sparse ndarray's aux_data and storage are initialized
    * Throws an exception if the indices array shape is inconsistent
    * Returns false if the indices array is empty(nnz = 0) for csr/row_sparse
@@ -304,9 +317,10 @@ class NDArray {
   inline bool storage_initialized() const {
     if (is_none()) return false;
     auto stype = storage_type();
-    CHECK_NE(stype, kDefaultStorage)
-             << "storage_initialized() is not intended for kDefaultStorage.";
-    if (stype == kRowSparseStorage) {
+
+    if (stype == kDefaultStorage) {
+      return (ptr_->shandle.dptr != nullptr && ptr_->shandle.size != 0);
+    } else if (stype == kRowSparseStorage) {
       CHECK_EQ(aux_shape(rowsparse::kIdx)[0], storage_shape()[0])
                << "inconsistent storage shape " << storage_shape()
                << " vs. aux shape " << aux_shape(rowsparse::kIdx);
@@ -694,15 +708,13 @@ class NDArray {
    * This function returns mkldnn::memory with the given primitive_desc
    * as long as the array size meets the required size in the given primitive_desc.
    */
-  const mkldnn::memory *GetMKLDNNData(
-      const mkldnn::memory::primitive_desc &desc) const;
+  const mkldnn::memory *GetMKLDNNData(const mkldnn::memory::primitive_desc &pd) const;
   /*
    * This function returns mkldnn::memory with the given primitive_desc.
    * The returned mkldnn::memory will have the same physical layout as
    * the given primitive_desc.
    */
-  const mkldnn::memory *GetMKLDNNDataReorder(
-      const mkldnn::memory::primitive_desc &desc) const;
+  const mkldnn::memory *GetMKLDNNDataReorder(const mkldnn::memory::primitive_desc &pd) const;
 
   /*
    * This function copies data from mkldnn memory.
@@ -712,8 +724,8 @@ class NDArray {
    * This function allocates memory for array and creates mkldnn memory
    * with the specified format.
    */
-  mkldnn::memory *CreateMKLDNNData(
-      const mkldnn::memory::primitive_desc &desc);
+  mkldnn::memory *CreateMKLDNNData();
+  mkldnn::memory *CreateMKLDNNData(const mkldnn::memory::primitive_desc &pd);
 
   /*
    * These are the async version of the methods above.

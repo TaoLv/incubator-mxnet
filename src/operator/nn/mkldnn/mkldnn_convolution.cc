@@ -40,10 +40,19 @@ bool SupportMKLDNNConv(const ConvolutionParam& params, const NDArray &input) {
   return input.dtype() == mshadow::kFloat32 && input.shape().ndim() == 4;
 }
 
-mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
-    const ConvolutionParam& param, const bool is_train, const NDArray &data,
-    const NDArray &weights, const NDArray *bias, const NDArray &output) {
-  auto prop = is_train ? mkldnn::prop_kind::forward_training : mkldnn::prop_kind::forward_scoring;
+mkldnn::convolution_forward::primitive_desc
+GetConvFwdImplAutomatic(const ConvolutionParam& param,
+                        const bool is_train,
+                        const NDArray &data,
+                        const NDArray &weights,
+                        const NDArray *bias,
+                        const NDArray &output) {
+  using mkldnn::convolution_forward;
+  using mkldnn::prop_kind;
+  using mkldnn::algorithm;
+  using mkldnn::padding_kind;
+
+  auto prop = is_train ? prop_kind::forward_training : prop_kind::forward_scoring;
   auto data_md = GetMemDesc(data);
   auto weight_md = GetWeightDesc(weights, param.num_group);
   auto out_md = GetMemDesc(output);
@@ -58,33 +67,55 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
   padding[0] = param.pad[0];
   padding[1] = param.pad[1];
   if (param.dilate.ndim() == 0 && bias == nullptr) {
-    mkldnn::convolution_forward::desc desc(prop, mkldnn::algorithm::convolution_direct,
-        data_md, weight_md, out_md, strides, padding, padding, mkldnn::padding_kind::zero);
-    return mkldnn::convolution_forward::primitive_desc(desc, engine);
+    convolution_forward::desc desc(prop, algorithm::convolution_direct,
+        data_md, weight_md, out_md, strides, padding, padding, padding_kind::zero);
+    return convolution_forward::primitive_desc(desc, engine);
   } else if (param.dilate.ndim() == 0) {
     auto bias_md = GetMemDesc(*bias);
-    mkldnn::convolution_forward::desc desc(prop, mkldnn::algorithm::convolution_direct,
+    convolution_forward::desc desc(prop, algorithm::convolution_direct,
         data_md, weight_md, bias_md, out_md, strides, padding, padding,
-        mkldnn::padding_kind::zero);
-    return mkldnn::convolution_forward::primitive_desc(desc, engine);
+        padding_kind::zero);
+    return convolution_forward::primitive_desc(desc, engine);
   } else {
     mkldnn::memory::dims dilates{0, 0};
     dilates[0] = param.dilate[0] - 1;
     dilates[1] = param.dilate[1] - 1;
     if (bias == nullptr) {
-      mkldnn::convolution_forward::desc desc(prop, mkldnn::algorithm::convolution_direct,
+      convolution_forward::desc desc(prop, algorithm::convolution_direct,
           data_md, weight_md, out_md, strides, dilates, padding, padding,
-          mkldnn::padding_kind::zero);
-      return mkldnn::convolution_forward::primitive_desc(desc, engine);
+          padding_kind::zero);
+      return convolution_forward::primitive_desc(desc, engine);
     } else {
       auto bias_md = GetMemDesc(*bias);
-      mkldnn::convolution_forward::desc desc(prop, mkldnn::algorithm::convolution_direct,
-                                             data_md, weight_md, bias_md, out_md, strides,
-                                             dilates, padding, padding,
-                                             mkldnn::padding_kind::zero);
-      return mkldnn::convolution_forward::primitive_desc(desc, engine);
+      convolution_forward::desc desc(prop, algorithm::convolution_direct,
+          data_md, weight_md, bias_md, out_md, strides, dilates, padding, padding,
+          padding_kind::zero);
+      return convolution_forward::primitive_desc(desc, engine);
     }
   }
+}
+
+mkldnn::convolution_forward::primitive_desc
+GetConvFwdImpl(const ConvolutionParam& param,
+               const bool is_train,
+               const NDArray &data,
+               const NDArray &weight,
+               const NDArray *bias,
+               const NDArray &output) {
+  auto conv_pd = GetConvFwdImplAutomatic(param, is_train, data, weight, bias, output);
+  size_t dst_size = output.storage_size();
+  if (dst_size == 0) return conv_pd;
+
+  while (true) {
+    size_t mkldnn_dst_size = conv_pd.dst_primitive_desc().get_size();
+    if (mkldnn_dst_size > dst_size) {
+      CHECK(conv_pd.next_impl()) << "There is no implementation satified the size requirement: "
+                                 << dst_size;
+    } else {
+      break;
+    }
+  }
+  return conv_pd;
 }
 
 static mkldnn::convolution_backward_data::primitive_desc GetConvBwdData(
@@ -238,15 +269,19 @@ MKLDNNConvForward &GetConvFwd(const nnvm::NodeAttrs& attrs, const bool is_train,
   return it->second;
 }
 
-void MKLDNNConvolutionForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
-                               const std::vector<NDArray> &in_data,
-                               const std::vector<OpReqType> &req,
-                               const std::vector<NDArray> &out_data) {
+void MKLDNNConvolutionForward(const nnvm::NodeAttrs& attrs,
+                              const OpContext &ctx,
+                              const std::vector<NDArray> &in_data,
+                              const std::vector<OpReqType> &req,
+                              const std::vector<NDArray> &out_data) {
   TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
+  NDArray data = in_data[conv::kData];
   NDArray weight = in_data[conv::kWeight];
-  MKLDNNConvForward &fwd = GetConvFwd(attrs, ctx.is_train, in_data[conv::kData], weight,
-      param.no_bias ? nullptr : &in_data[conv::kBias], out_data[conv::kOut]);
+  NDArray out = out_data[conv::kOut];
+  const NDArray *bias = param.no_bias ? nullptr : &in_data[conv::kBias];
+
+  MKLDNNConvForward &fwd = GetConvFwd(attrs, ctx.is_train, data, weight, bias, out);
 
   auto data_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
   const mkldnn::memory *weight_mem;

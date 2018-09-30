@@ -482,26 +482,40 @@ void NDArray::Chunk::SetMKLMem(const TShape &shape, int dtype) {
  * the given one. operator== can't guarantee that. == can return true even if
  * the formats are different. I need to double check its format.
  */
-static inline mkldnn::memory *GetMKLDNNExact(
-    const mkldnn::memory *mem, mkldnn::memory::primitive_desc desc) {
-  mkldnn::memory::primitive_desc src_desc = mem->get_primitive_desc();
-  if (desc == src_desc && desc.desc().data.format == src_desc.desc().data.format) {
+static inline mkldnn::memory *GetMKLDNNExact(const mkldnn::memory *mem,
+                                             mkldnn::memory::primitive_desc pd) {
+  mkldnn::memory::primitive_desc src_pd = mem->get_primitive_desc();
+  if (pd == src_pd && pd.desc().data.format == src_pd.desc().data.format) {
     return const_cast<mkldnn::memory *>(mem);
   } else {
-    std::shared_ptr<mkldnn::memory> ret(new mkldnn::memory(
-            desc, mem->get_data_handle()));
+    std::shared_ptr<mkldnn::memory> ret(new mkldnn::memory(pd, mem->get_data_handle()));
     MKLDNNStream::Get()->RegisterMem(ret);
     return ret.get();
   }
 }
 
-const mkldnn::memory *NDArray::GetMKLDNNData(
-    const mkldnn::memory::primitive_desc &desc) const {
-  if (desc.get_size() != shape().Size() * GetTypeSize(dtype_)) {
-    LOG(FATAL) << "The size of NDArray doesn't match the requested MKLDNN memory desc";
-    return nullptr;
+const mkldnn::memory *NDArray::GetMKLDNNData(const mkldnn::memory::primitive_desc &pd) const {
+  if (IsMKLDNN()) {
+    CHECK(!IsView());
+    const mkldnn::memory *mem = GetMKLDNNData();
+    mkldnn::memory::primitive_desc pd1 = mem->get_primitive_desc();
+    mkldnn::memory::primitive_desc pd2 = pd;
+    mkldnn::memory::desc desc1 = pd1.desc();
+    mkldnn::memory::desc desc2 = pd2.desc();
+
+    if (pd1 == pd2 ||
+        (desc1.data.format == GetDefaultFormat(desc1) &&
+        (desc2.data.format == GetDefaultFormat(desc2)))) {
+      return GetMKLDNNExact(mem, pd);
+    } else {
+      return GetMKLDNNDataReorder(pd);
+    }
+  } else {
+    
   }
-  const mkldnn::memory *mem = GetMKLDNNData();
+    
+    
+    const mkldnn::memory *mem = GetMKLDNNData();
   mkldnn::memory::primitive_desc _desc = desc;
   mkldnn::memory::desc desc1 = mem->get_primitive_desc().desc();
   mkldnn::memory::desc desc2 = _desc.desc();
@@ -519,9 +533,9 @@ const mkldnn::memory *NDArray::GetMKLDNNData(
 const mkldnn::memory *NDArray::GetMKLDNNDataReorder(
     const mkldnn::memory::primitive_desc &new_pd) const {
   if (new_pd.get_size() != shape().Size() * GetTypeSize(dtype_)) {
-    LOG(FATAL) << "The size of NDArray doesn't match the requested MKLDNN memory desc";
-    return nullptr;
+    LOG(INFO) << "The size of NDArray doesn't match the requested MKLDNN memory desc";
   }
+
   CHECK(storage_type() == kDefaultStorage);
 
   const mkldnn::memory *mem = GetMKLDNNData();
@@ -674,6 +688,18 @@ void NDArray::CopyFrom(const mkldnn::memory &mem) {
 
   const mkldnn::memory *this_mem = GetMKLDNNData();
   MKLDNNCopy(mem, this_mem);
+}
+
+const mkldnn::memory *NDArray::CreateMKLDNNData() {
+  CHECK(! is_none());
+  CHECK_EQ(storage_type(), kDefaultStorage);
+
+  if (ptr_->mkl_mem_) {
+    return ptr_->mkl_mem_->GetRaw();
+  } else {
+    CHECK
+  }
+
 }
 
 mkldnn::memory *NDArray::CreateMKLDNNData(const mkldnn::memory::primitive_desc &desc) {
