@@ -691,21 +691,34 @@ void NDArray::CopyFrom(const mkldnn::memory &mem) {
 }
 
 const mkldnn::memory *NDArray::CreateMKLDNNData() {
-  CHECK(! is_none());
+  CHECK(!is_none());
   CHECK_EQ(storage_type(), kDefaultStorage);
 
   if (ptr_->mkl_mem_) {
     return ptr_->mkl_mem_->GetRaw();
   } else {
-    CHECK
+    CHECK(!IsView());
+    // ptr_->CheckAndAlloc();
+    ptr_->SetMKLMem(shape_, dtype_);
+    CHECK(ptr_->mkl_mem_);
+    return ptr_->mkl_mem_->GetRaw();
   }
-
 }
 
-mkldnn::memory *NDArray::CreateMKLDNNData(const mkldnn::memory::primitive_desc &desc) {
-  if (desc.get_size() != shape().Size() * GetTypeSize(dtype_)) {
-    LOG(FATAL) << "The size of NDArray doesn't match the requested MKLDNN memory desc";
-    return nullptr;
+mkldnn::memory *NDArray::CreateMKLDNNData(const mkldnn::memory::primitive_desc &pd) {
+  if (ptr_->mkl_mem_) {
+    auto pd_ = ptr_->mkl_mem_->GetPrimitiveDesc();
+    if (pd_ != pd || pd_.desc() != pd.desc() ||
+	pd_.desc().data.format != pd.desc().data.format) {
+      LOG(FATAL) << "NDArray already has MKL-DNN memory and the primitive descriptor of it "
+		 << "is not same as the input primitive descriptor";
+      return nullptr;
+    } else {
+      return ptr_->mkl_mem_->GetRaw();
+    }
+  } else {  // original NDArray
+    // if possible, will create MKL-DNN memory accordingto pd.
+
   }
 
   mkldnn::memory::primitive_desc _desc = desc;
