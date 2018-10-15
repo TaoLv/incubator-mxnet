@@ -297,6 +297,19 @@ class NDArray {
   bool fresh_out_grad() const;
   /*! \return updated grad state in entry_ */
   void set_fresh_out_grad(bool state) const;
+
+  /*! \return the storage size in ptr_ */
+  inline size_t storage_size() const {
+    CHECK(!is_none());
+    auto stype = storage_type();
+    CHECK_EQ(stype, kDefaultStorage)
+        << "storage_size is not intend for other storage types except kDefaultStorage: " << stype;
+     if (ptr_->shandle.dptr == nullptr || ptr_->shandle.size == 0)
+        return 0;
+    else
+        return ptr_->shandle.size;
+  }
+
   /*! \brief Returns true if a sparse ndarray's aux_data and storage are initialized
    * Throws an exception if the indices array shape is inconsistent
    * Returns false if the indices array is empty(nnz = 0) for csr/row_sparse
