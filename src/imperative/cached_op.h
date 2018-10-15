@@ -38,6 +38,7 @@ struct CachedOpConfig : public dmlc::Parameter<CachedOpConfig> {
   bool disable_memory_planning;
   nnvm::Tuple<uint32_t> data_indices;
   nnvm::Tuple<uint32_t> param_indices;
+  std::string subgraph;
   DMLC_DECLARE_PARAMETER(CachedOpConfig) {
     DMLC_DECLARE_FIELD(disable_memory_planning)
     .set_default(false)
@@ -66,6 +67,9 @@ struct CachedOpConfig : public dmlc::Parameter<CachedOpConfig> {
     DMLC_DECLARE_FIELD(param_indices)
     .set_default(nnvm::Tuple<uint32_t>())
     .describe("Position of parameters.");
+    DMLC_DECLARE_FIELD(subgraph)
+    .set_default(std::string(""))
+    .describe("JSON string of a subgraph.");
   }
 };
 
@@ -83,6 +87,10 @@ class CachedOp {
   }
   uint32_t num_backward_inputs() const {
     return bwd_ograd_dep_.size() + bwd_in_dep_.size() + bwd_out_dep_.size();
+  }
+  uint32_t num_backward_outputs() const {
+    auto &idx = fwd_graph_.indexed_graph();
+    return idx.input_nodes().size() - idx.mutable_input_nodes().size();
   }
   std::vector<bool>& save_inputs() {
     return save_inputs_;
@@ -106,13 +114,6 @@ class CachedOp {
       const std::vector<NDArray*>& inputs,
       const std::vector<OpReqType>& reqs,
       const std::vector<NDArray*>& outputs);
-  // forward storage type inference
-  bool ForwardStorageType(
-      const nnvm::NodeAttrs& attrs,
-      const int dev_mask,
-      DispatchMode* dispatch_mode,
-      std::vector<int> *in_attrs,
-      std::vector<int> *out_attrs);
   // backward storage type inference
   bool BackwardStorageType(
       const nnvm::NodeAttrs& attrs,
@@ -120,6 +121,19 @@ class CachedOp {
       DispatchMode* dispatch_mode,
       std::vector<int> *in_attrs,
       std::vector<int> *out_attrs);
+  std::vector<std::string> ListForwardInputNames() const {
+    nnvm::Symbol sym = GetForwardSym();
+    return sym.ListInputNames(nnvm::Symbol::kAll);
+  }
+  std::vector<std::string> ListForwardOutputNames() const {
+    nnvm::Symbol sym = GetForwardSym();
+    return sym.ListOutputNames();
+  }
+  nnvm::Symbol GetForwardSym() const {
+    nnvm::Symbol sym;
+    sym.outputs = fwd_graph_.outputs;
+    return sym;
+  }
 
  private:
   struct GraphInfo;
