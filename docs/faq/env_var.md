@@ -196,6 +196,11 @@ When USE_PROFILER is enabled in Makefile or CMake, the following environments ca
   - Flag to enable or disable MKLDNN accelerator. On by default.
   - Only applies to mxnet that has been compiled with MKLDNN (```pip install mxnet-mkl``` or built from source with ```USE_MKLDNN=1```)
 
+* MXNET_MKLDNN_WINOGRAD_ENABLED
+  - Values: 0, 1 ```(default=0)```
+  - Flag to enable or disable Winograd algorithm for MKLDNN Convolution. Off by default.
+  - Only applies to mxnet that has been compiled with MKLDNN (```pip install mxnet-mkl``` or built from source with ```USE_MKLDNN=1```)
+
 * MXNET_ENFORCE_DETERMINISM
   - Values: 0(false) or 1(true) ```(default=0)```
   - If set to true, MXNet will only use deterministic algorithms in forward and backward computation.
