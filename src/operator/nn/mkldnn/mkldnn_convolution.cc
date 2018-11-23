@@ -87,7 +87,9 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
 
   static bool use_wino = dmlc::GetEnv("MXNET_MKLDNN_WINOGRAD_ENABLED", false);
   auto algo = mkldnn::algorithm::convolution_direct;
-  if (!is_train && use_wino) {
+  if (!is_train && use_wino &&
+      strides[0] == 1 && strides[1] == 1 &&
+      weights.shape()[2] == 3 && weights.shape()[3] == 3) {
     algo = mkldnn::algorithm::convolution_winograd;
   }
 
@@ -97,6 +99,7 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
   // memory size may smaller than what MKL-DNN kernels require. So here we need
   // select suboptimal kernel for computation according to tensor sizes.
   if (param.conv_param.dilate.ndim() == 0 && bias == nullptr) {
+    try {
     mkldnn::convolution_forward::desc desc(prop, algo,
         data_md, weight_md, out_md, strides, padding, padding, mkldnn::padding_kind::zero);
     auto conv_pd =  mkldnn::convolution_forward::primitive_desc(desc, attr, engine);
@@ -106,8 +109,14 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
       CHECK(conv_pd.next_impl()) << "No implementation";
     }
     return conv_pd;
+    } catch (mkldnn::error &e) {
+      LOG(FATAL) << "MKL-DNN error: " << e.status << ", message: " << e.message
+                 << ". OC=" << weights.shape()[0] << ", IC=" << weights.shape()[1]
+                 << ". kH=" << weights.shape()[2] << ", kW=" << weights.shape()[3];
+    }
   } else if (param.conv_param.dilate.ndim() == 0) {
     auto bias_md = GetMemDesc(*bias);
+    try {
     mkldnn::convolution_forward::desc desc(prop, algo,
         data_md, weight_md, bias_md, out_md, strides, padding, padding,
         mkldnn::padding_kind::zero);
@@ -118,11 +127,17 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
       CHECK(conv_pd.next_impl()) << "No implementation";
     }
     return conv_pd;
+    } catch (mkldnn::error &e) {
+      LOG(FATAL) << "MKL-DNN error: " << e.status << ", message: " << e.message
+                 << ". OC=" << weights.shape()[0] << ", IC=" << weights.shape()[1]
+                 << ". kH=" << weights.shape()[2] << ", kW=" << weights.shape()[3];
+    }
   } else {
     mkldnn::memory::dims dilates{0, 0};
     dilates[0] = param.conv_param.dilate[0] - 1;
     dilates[1] = param.conv_param.dilate[1] - 1;
     if (bias == nullptr) {
+      try {
       mkldnn::convolution_forward::desc desc(prop, algo,
           data_md, weight_md, out_md, strides, dilates, padding, padding,
           mkldnn::padding_kind::zero);
@@ -133,8 +148,14 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
         CHECK(conv_pd.next_impl()) << "No implementation";
       }
       return conv_pd;
+      } catch (mkldnn::error &e) {
+        LOG(FATAL) << "MKL-DNN error: " << e.status << ", message: " << e.message
+                   << ". OC=" << weights.shape()[0] << ", IC=" << weights.shape()[1]
+                   << ". kH=" << weights.shape()[2] << ", kW=" << weights.shape()[3];
+      }
     } else {
       auto bias_md = GetMemDesc(*bias);
+      try {
       mkldnn::convolution_forward::desc desc(prop, algo,
                                              data_md, weight_md, bias_md, out_md, strides,
                                              dilates, padding, padding,
@@ -146,6 +167,11 @@ mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
         CHECK(conv_pd.next_impl()) << "No implementation";
       }
       return conv_pd;
+      } catch (mkldnn::error &e) {
+        LOG(FATAL) << "MKL-DNN error: " << e.status << ", message: " << e.message
+                   << ". OC=" << weights.shape()[0] << ", IC=" << weights.shape()[1]
+                   << ". kH=" << weights.shape()[2] << ", kW=" << weights.shape()[3];
+      }
     }
   }
 }
