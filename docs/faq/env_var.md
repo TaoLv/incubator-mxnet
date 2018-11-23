@@ -197,7 +197,7 @@ When USE_PROFILER is enabled in Makefile or CMake, the following environments ca
   - Only applies to mxnet that has been compiled with MKLDNN (```pip install mxnet-mkl``` or built from source with ```USE_MKLDNN=1```)
 
 * MXNET_MKLDNN_WINOGRAD_ENABLED
-  - Values: 0, 1 ```(default=0)```
+  - Values: 0(false) or 1(true) ```(default=0)```
   - Flag to enable or disable Winograd algorithm for MKLDNN Convolution. Off by default.
   - Only applies to mxnet that has been compiled with MKLDNN (```pip install mxnet-mkl``` or built from source with ```USE_MKLDNN=1```)
 
