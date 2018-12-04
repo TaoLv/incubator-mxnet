@@ -36,7 +36,6 @@
 
 namespace mxnet {
 namespace op {
-
 struct Sum {
   template<typename DType>
   MSHADOW_XINLINE static DType sum(int i, const DType* a) {
