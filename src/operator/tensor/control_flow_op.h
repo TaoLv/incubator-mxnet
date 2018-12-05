@@ -32,6 +32,7 @@
 #include "../operator_common.h"
 #include "../elemwise_op_common.h"
 #include "../tensor/init_op.h"
+#include "mkl.h"
 
 namespace mxnet {
 namespace op {
@@ -80,6 +81,25 @@ struct where_csr {
   }
 };
 
+template<typename DType, typename CType>
+void where_batch_func(DType* out, const CType* cond, const DType* x, const DType* y, const int M, const int N) {
+  static int omp_threads = mxnet::engine::OpenMP::Get()->GetRecommendedOMPThreadCount();
+  if (M == 1) {
+#pragma omp parallel for shared(out, cond, x, y) num_threads(8)
+    for (int i = 0; i < N; i++) {
+      out[i] = (cond[i] != 0) ? x[i] : y[i];
+    }
+  } else {
+#pragma omp parallel for shared(out, cond, x, y) num_threads(omp_threads)
+    for (int i = 0; i < N; i++) {
+      if (cond[i] != 0 ) {
+        memcpy((void*)(out + i * M), (void*)(x + i * M), M * sizeof(DType));
+      } else {
+        memcpy((void*)(out + i * M), (void*)(y + i * M), M * sizeof(DType));
+      }
+    }
+  }
+}
 
 /*! \brief Choose elements from x or y depending on condition
  * The condition is a vector whose size is the same as the
@@ -295,9 +315,11 @@ void WhereOpForward(const nnvm::NodeAttrs& attrs,
                                                cond.dptr<CType>(), x.dptr<DType>(),
                                                y.dptr<DType>());
         } else {
-          Kernel<where_batch<req_type>, xpu>::Launch(s, out.Size(), out.dptr<DType>(),
-                                                     cond.dptr<CType>(), x.dptr<DType>(),
-                                                     y.dptr<DType>(), x.Size()/cond.Size());
+          where_batch_func<DType, CType>(out.dptr<DType>(), cond.dptr<CType>(), x.dptr<DType>(),
+                                         y.dptr<DType>(), x.Size()/cond.Size(), cond.Size());
+          // Kernel<where_batch<req_type>, xpu>::Launch(s, out.Size(), out.dptr<DType>(),
+          //                                            cond.dptr<CType>(), x.dptr<DType>(),
+          //                                            y.dptr<DType>(), x.Size()/cond.Size());
         }
       });
     });
