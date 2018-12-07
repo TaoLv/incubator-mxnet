@@ -32,7 +32,6 @@
 #include "../operator_common.h"
 #include "../elemwise_op_common.h"
 #include "../tensor/init_op.h"
-#include "mkl.h"
 
 namespace mxnet {
 namespace op {
@@ -81,21 +80,28 @@ struct where_csr {
   }
 };
 
+#define MIN(a,b) ((a < b) ? a : b)
+
 template<typename DType, typename CType>
 void where_batch_func(DType* out, const CType* cond, const DType* x, const DType* y, const int M, const int N) {
   static int omp_threads = mxnet::engine::OpenMP::Get()->GetRecommendedOMPThreadCount();
+  const int blk_size = 64/sizeof(DType);
   if (M == 1) {
-#pragma omp parallel for shared(out, cond, x, y) num_threads(8)
-    for (int i = 0; i < N; i++) {
-      out[i] = (cond[i] != 0) ? x[i] : y[i];
+#pragma omp parallel for num_threads(omp_threads)
+    for (int blk = 0; blk < N; blk += blk_size) {
+      int blk_bound = MIN((blk + blk_size), N);
+      for (int i = blk; i < blk_bound; i++) {
+        out[i] = (cond[i] != 0) ? x[i] : y[i];
+      }
     }
   } else {
-#pragma omp parallel for shared(out, cond, x, y) num_threads(omp_threads)
+    const int len = M * sizeof (DType);
+#pragma omp parallel for num_threads(omp_threads)
     for (int i = 0; i < N; i++) {
       if (cond[i] != 0 ) {
-        memcpy((void*)(out + i * M), (void*)(x + i * M), M * sizeof(DType));
+        memcpy((void*)(out + i * M), (void*)(x + i * M), len);
       } else {
-        memcpy((void*)(out + i * M), (void*)(y + i * M), M * sizeof(DType));
+        memcpy((void*)(out + i * M), (void*)(y + i * M), len);
       }
     }
   }

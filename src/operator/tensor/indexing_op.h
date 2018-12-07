@@ -296,6 +296,38 @@ inline bool SparseEmbeddingOpBackwardStorageType(const nnvm::NodeAttrs& attrs,
   return dispatched;
 }
 
+#define MIN(a,b) ((a < b) ? a : b)
+
+template<typename DType, typename IType>
+void take_axis0_clip_func(DType* out_data, const DType* in_data, const IType* idx,
+                     const int N, const int M, const int K) {
+  static int omp_threads = mxnet::engine::OpenMP::Get()->GetRecommendedOMPThreadCount();
+  const int blk_size = 64/sizeof(DType);
+  if (M == 1) {
+#pragma omp parallel for num_threads(omp_threads)
+    for (int blk = 0; blk < N; blk += blk_size) {
+      int blk_bound = MIN(blk + blk_size, N);
+      for (int i = blk; i < blk_bound; i++) {
+        int j = static_cast<int>(idx[i]);
+        if (j <= 0) j = 0;
+        else if (j >= K) j = K - 1;
+        out_data[i] = in_data[j];
+      }
+    }
+  } else {
+    const int len = M * sizeof (DType);
+#pragma omp parallel for num_threads(omp_threads)
+    for (int i = 0; i < N; i++) {
+      int j = static_cast<int>(idx[i]);
+      if (j <= 0) j = 0;
+      else if (j >= K) j = K - 1;
+      memcpy(reinterpret_cast<void*>(out_data + i * M),
+             reinterpret_cast<const void*>(in_data + j * M),
+             len);
+    }
+  }
+}
+
 /*! \brief name the struct Take instead of take
  * to avoid conflict with the take function in mshadow
  */
@@ -778,11 +810,15 @@ void TakeOpForward(const nnvm::NodeAttrs& attrs,
     MSHADOW_TYPE_SWITCH(inputs[1].type_flag_, IType, {  // index data type
       if (actual_axis == 0) {
         if (param.mode == take_::kClip) {
-          Kernel<Take<true>, xpu>::Launch(s, oshape.Size(),
-                                          outputs[take_::kOut].dptr<DType>(),
-                                          inputs[take_::kArr].dptr<DType>(),
-                                          inputs[take_::kIdx].dptr<IType>(),
-                                          oshape.Size()/idxshape.Size(), arrshape[0]);
+          take_axis0_clip_func(outputs[take_::kOut].dptr<DType>(),
+                               inputs[take_::kArr].dptr<DType>(),
+                               inputs[take_::kIdx].dptr<IType>(),
+                               idxshape[0], oshape.Size()/idxshape.Size(), arrshape[0]);
+          // Kernel<Take<true>, xpu>::Launch(s, oshape.Size(),
+          //                                 outputs[take_::kOut].dptr<DType>(),
+          //                                 inputs[take_::kArr].dptr<DType>(),
+          //                                 inputs[take_::kIdx].dptr<IType>(),
+          //                                 oshape.Size()/idxshape.Size(), arrshape[0]);
         } else {
           Kernel<Take<false>, xpu>::Launch(s, oshape.Size(),
                                            outputs[take_::kOut].dptr<DType>(),
