@@ -35,6 +35,31 @@ namespace mxnet {
 namespace op {
 DMLC_REGISTER_PARAMETER(SoftmaxParam);
 
+#if MSHADOW_USE_MKL == 1
+void LogSoftmaxComputeMKL(const nnvm::NodeAttrs& attrs,
+                          const OpContext& ctx,
+                          const std::vector<TBlob>& inputs,
+                          const std::vector<OpReqType>& req,
+                          const std::vector<TBlob>& outputs) {
+  if (req[0] == kNullOp) return;
+  CHECK_NE(req[0], kAddTo);
+  const SoftmaxParam& param = nnvm::get<SoftmaxParam>(attrs.parsed);
+  int axis = CheckAxis(param.axis, inputs[0].ndim());
+  if (inputs[0].type_flag_ != mshadow::kFloat32 ||
+      param.temperature.has_value() ||
+      inputs[0].shape_.ndim() != 4U) {
+    // fallback
+    printf("fallback \n");
+    SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>(attrs, ctx, inputs, req, outputs);
+  } else {
+    printf("mkl impl %d \n", axis);
+    int sh[4] = {0};
+    for (int i = 0; i < 4; i++) sh[i] = inputs[0].shape_[i];
+    log_softmax_parallel(sh, axis, inputs[0].dptr<float>(), outputs[0].dptr<float>());
+  }
+}
+#endif
+
 #if MXNET_USE_MKLDNN == 1
 static void SoftmaxComputeExCPU(const nnvm::NodeAttrs& attrs,
                                 const OpContext& ctx,
@@ -167,7 +192,11 @@ Examples::
 
 )code")
 .set_attr_parser(ParamParser<SoftmaxParam>)
+#if MSHADOW_USE_MKL == 1
+.set_attr<FCompute>("FCompute<cpu>", LogSoftmaxComputeMKL)
+#else
 .set_attr<FCompute>("FCompute<cpu>", SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>)
+#endif
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_log_softmax"})
 .add_arguments(SoftmaxParam::__FIELDS__());
 
