@@ -316,35 +316,35 @@ void SoftmaxCompute(const nnvm::NodeAttrs& attrs,
 
 
 #if MSHADOW_USE_MKL == 1
-static inline int prod(int n[4], int start, int end){
-  int res = 1;
-  for (int i = start; i<end; i++)
-      res *= n[i];
+static inline int64_t prod(int64_t* n, int start, int end){
+  int64_t res = 1;
+  for (int i = start; i < end; i++)
+    res *= n[i];
   return res;
 }
 
-static inline void max_(int n, float * __restrict__ in, float *dst){
+static inline void max_(int64_t n, float * __restrict__ in, float *dst){
   dst[0] = in[0];
-  for(int i = 1; i<n; i++)
-      dst[0] = (dst[0] < in[i]) ? in[i] : dst[0];
+  for(int64_t i = 1; i < n; i++)
+    dst[0] = (dst[0] < in[i]) ? in[i] : dst[0];
 }
 
-static inline void sub_(int n, float * __restrict__ in, float b, float * __restrict__ dst){
-  for(int i = 0; i<n; i++)
-      dst[i] = in[i] - b;
+static inline void sub_(int64_t n, float * __restrict__ in, float b, float * __restrict__ dst){
+  for(int64_t i = 0; i < n; i++)
+    dst[i] = in[i] - b;
 }
 
-static inline void sum_(int n, float * __restrict__ in, float * __restrict__ dst){
+static inline void sum_(int64_t n, float * __restrict__ in, float * __restrict__ dst){
   dst[0] = cblas_sasum(n, in, 1);
 }
 
-static inline void exp_(int n, float *in, float *dst){
+static inline void exp_(int64_t n, float *in, float *dst){
   vsExp(n, in, dst);
 }
 
-static inline void log_softmax_parallel(int n[4], int axis, float * __restrict__ in, float * __restrict__ out){
-  int outer_size = prod(n, 0, axis);
-  int channels = n[axis];
+static inline void log_softmax_parallel(TShape sh, int axis, float * __restrict__ in, float * __restrict__ out){
+  int64_t outer_size = prod(sh.data(), 0, axis);
+  int64_t channels = sh[axis];
   // int inner_size = prod(n, axis+1, 4);
 
 #pragma omp parallel for

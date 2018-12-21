@@ -36,6 +36,19 @@ namespace op {
 DMLC_REGISTER_PARAMETER(SoftmaxParam);
 
 #if MSHADOW_USE_MKL == 1
+static inline bool SupportLogSoftmaxMKL(const TBlob &input, const SoftmaxParam &param) {
+  if (input.type_flag_ != mshadow::kFloat32) return false;
+  if (param.temperature.has_value()) return false;
+
+  int axis = CheckAxis(param.axis, input.ndim());
+  // channle on the last dimension
+  if ((input.ndim() == 4U && axis == 3U) ||
+      (input.ndim() == 3U && axis == 2U))
+    return true;
+  else
+    return false;
+}
+
 void LogSoftmaxComputeMKL(const nnvm::NodeAttrs& attrs,
                           const OpContext& ctx,
                           const std::vector<TBlob>& inputs,
@@ -45,16 +58,11 @@ void LogSoftmaxComputeMKL(const nnvm::NodeAttrs& attrs,
   CHECK_NE(req[0], kAddTo);
   const SoftmaxParam& param = nnvm::get<SoftmaxParam>(attrs.parsed);
   int axis = CheckAxis(param.axis, inputs[0].ndim());
-  if (inputs[0].type_flag_ != mshadow::kFloat32 ||
-      param.temperature.has_value() ||
-      inputs[0].shape_.ndim() != 4U ||
-      axis != 3U) {
+  if (! SupportLogSoftmaxMKL(inputs[0], param)) {
     // fallback
     SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>(attrs, ctx, inputs, req, outputs);
   } else {
-    int sh[4] = {0};
-    for (int i = 0; i < 4; i++) sh[i] = inputs[0].shape_[i];
-    log_softmax_parallel(sh, axis, inputs[0].dptr<float>(), outputs[0].dptr<float>());
+    log_softmax_parallel(inputs[0].shape_, axis, inputs[0].dptr<float>(), outputs[0].dptr<float>());
   }
 }
 #endif
