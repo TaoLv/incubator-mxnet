@@ -347,7 +347,7 @@ static inline void log_softmax_parallel(int n[4], int axis, float * __restrict__
   int channels = n[axis];
   // int inner_size = prod(n, axis+1, 4);
 
-// #pragma omp parallel for
+#pragma omp parallel for
   for (int ou=0; ou < outer_size; ou++){
     float *in_dat = in + ou * channels;
     float *out_dat = out + ou * channels;

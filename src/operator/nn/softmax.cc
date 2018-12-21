@@ -47,12 +47,11 @@ void LogSoftmaxComputeMKL(const nnvm::NodeAttrs& attrs,
   int axis = CheckAxis(param.axis, inputs[0].ndim());
   if (inputs[0].type_flag_ != mshadow::kFloat32 ||
       param.temperature.has_value() ||
-      inputs[0].shape_.ndim() != 4U) {
+      inputs[0].shape_.ndim() != 4U ||
+      axis != 3U) {
     // fallback
-    printf("fallback \n");
     SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>(attrs, ctx, inputs, req, outputs);
   } else {
-    printf("mkl impl %d \n", axis);
     int sh[4] = {0};
     for (int i = 0; i < 4; i++) sh[i] = inputs[0].shape_[i];
     log_softmax_parallel(sh, axis, inputs[0].dptr<float>(), outputs[0].dptr<float>());
