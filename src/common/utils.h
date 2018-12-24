@@ -458,6 +458,15 @@ inline void LogStorageFallback(const nnvm::NodeAttrs& attrs,
                                const int dev_mask,
                                const std::vector<int>* in_attrs,
                                const std::vector<int>* out_attrs) {
+#if MXNET_USE_MKLDNN == 1
+  if (!MKLDNNEnvSet()) common::LogOnce("MXNET_MKLDNN_ENABLED flag is off. "
+                                       "You can re-enable by setting MXNET_MKLDNN_ENABLED=1");
+  if (GetMKLDNNCacheSize() != -1) common::LogOnce("MXNET_MKLDNN_CACHE_NUM is set."
+                                       "Should only be set if "
+                                       "your model has variable input shapes, "
+                                       "as cache size may grow unbounded");
+#endif
+
   static bool log = dmlc::GetEnv("MXNET_STORAGE_FALLBACK_LOG_VERBOSE", true);
   if (!log) return;
   const std::string op_str = operator_stype_string(attrs, dev_mask, *in_attrs, *out_attrs);
@@ -471,14 +480,6 @@ inline void LogStorageFallback(const nnvm::NodeAttrs& attrs,
     "0 to suppress this warning.";
   os << "\nStorage type fallback detected:\n" << op_str << warning;
   LogOnce(os.str());
-#if MXNET_USE_MKLDNN == 1
-  if (!MKLDNNEnvSet()) common::LogOnce("MXNET_MKLDNN_ENABLED flag is off. "
-                                       "You can re-enable by setting MXNET_MKLDNN_ENABLED=1");
-  if (GetMKLDNNCacheSize() != -1) common::LogOnce("MXNET_MKLDNN_CACHE_NUM is set."
-                                       "Should only be set if "
-                                       "your model has variable input shapes, "
-                                       "as cache size may grow unbounded");
-#endif
 }
 
 // heuristic to dermine number of threads per GPU
