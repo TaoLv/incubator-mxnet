@@ -32,6 +32,41 @@ namespace mxnet {
 namespace op {
 DMLC_REGISTER_PARAMETER(SoftmaxParam);
 
+#if MSHADOW_USE_MKL == 1
+static inline bool SupportLogSoftmaxMKL(const TBlob &input, const SoftmaxParam &param) {
+  if (input.type_flag_ != mshadow::kFloat32) return false;
+  if (param.temperature.has_value()) return false;
+
+  int axis = CheckAxis(param.axis, input.ndim());
+  // channle on the last dimension
+  if ((input.ndim() == 4U && axis == 3U) ||
+      (input.ndim() == 3U && axis == 2U) ||
+      (input.ndim() == 2U && axis == 1U))
+    return true;
+  else
+    return false;
+}
+
+void LogSoftmaxComputeMKL(const nnvm::NodeAttrs& attrs,
+                          const OpContext& ctx,
+                          const std::vector<TBlob>& inputs,
+                          const std::vector<OpReqType>& req,
+                          const std::vector<TBlob>& outputs) {
+  if (req[0] == kNullOp) return;
+  CHECK_NE(req[0], kAddTo);
+  const SoftmaxParam& param = nnvm::get<SoftmaxParam>(attrs.parsed);
+  int axis = CheckAxis(param.axis, inputs[0].ndim());
+  // printf("logsoftmax: axis %d, ndim %d, shape: %d %d\n", axis, inputs[0].ndim(),
+  //                    inputs[0].shape_[0], inputs[0].shape_[1]);
+  if (! SupportLogSoftmaxMKL(inputs[0], param)) {
+    // fallback
+    SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>(attrs, ctx, inputs, req, outputs);
+  } else {
+    log_softmax_parallel(inputs[0].shape_, axis, inputs[0].dptr<float>(), outputs[0].dptr<float>());
+  }
+}
+#endif
+
 #if MXNET_USE_MKLDNN == 1
 static void SoftmaxComputeExCPU(const nnvm::NodeAttrs& attrs,
                                 const OpContext& ctx,
@@ -134,7 +169,11 @@ Examples::
 
 )code")
 .set_attr_parser(ParamParser<SoftmaxParam>)
+#if MSHADOW_USE_MKL == 1
+.set_attr<FCompute>("FCompute<cpu>", LogSoftmaxComputeMKL)
+#else
 .set_attr<FCompute>("FCompute<cpu>", SoftmaxCompute<cpu, mxnet_op::log_softmax_fwd>)
+#endif
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_log_softmax"})
 .add_arguments(SoftmaxParam::__FIELDS__());
 

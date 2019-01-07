@@ -31,6 +31,10 @@
 #include "../operator_common.h"
 #include "../tensor/broadcast_reduce_op.h"
 
+#if MSHADOW_USE_MKL == 1
+#include "mkl.h"
+#endif
+
 namespace mxnet {
 namespace op {
 namespace mxnet_op {
@@ -293,6 +297,54 @@ void SoftmaxCompute(const nnvm::NodeAttrs& attrs,
     }
   });
 }
+
+#if MSHADOW_USE_MKL == 1
+static inline int64_t prod(int64_t* n, int start, int end){
+  int64_t res = 1;
+  for (int i = start; i < end; i++)
+    res *= n[i];
+  return res;
+}
+
+static inline void max_(int64_t n, float * __restrict__ in, float *dst){
+  dst[0] = in[0];
+  for(int64_t i = 1; i < n; i++)
+    dst[0] = (dst[0] < in[i]) ? in[i] : dst[0];
+}
+
+static inline void sub_(int64_t n, float * __restrict__ in, float b, float * __restrict__ dst){
+  for(int64_t i = 0; i < n; i++)
+    dst[i] = in[i] - b;
+}
+
+static inline void sum_(int64_t n, float * __restrict__ in, float * __restrict__ dst){
+  dst[0] = cblas_sasum(n, in, 1);
+}
+
+static inline void exp_(int64_t n, float *in, float *dst){
+  vsExp(n, in, dst);
+}
+
+static inline void log_softmax_parallel(TShape sh, int axis, float * __restrict__ in, float * __restrict__ out){
+  int64_t outer_size = prod(sh.data(), 0, axis);
+  int64_t channels = sh[axis];
+  // int inner_size = prod(n, axis+1, 4);
+
+#pragma omp parallel for
+  for (int ou=0; ou < outer_size; ou++){
+    float *in_dat = in + ou * channels;
+    float *out_dat = out + ou * channels;
+    float b, logsum;
+
+    max_(channels, in_dat, &b);
+    sub_(channels, in_dat, b, out_dat);
+    exp_(channels, out_dat, out_dat);
+    sum_(channels, out_dat, &logsum);
+    logsum = b + logf(logsum);
+    sub_(channels, in_dat, logsum, out_dat);
+  }
+}
+#endif
 
 
 template<typename xpu, typename OP1, typename OP2>
