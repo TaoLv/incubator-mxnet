@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-CC = /opt/intel/bin/icc
-CXX = /opt/intel/bin/icpc
+export CC = icc
+export CXX = icpc
 
 ROOTDIR = $(CURDIR)
 TPARTYDIR = $(ROOTDIR)/3rdparty
