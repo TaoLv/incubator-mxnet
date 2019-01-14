@@ -39,10 +39,14 @@ cd incubator-mxnet
 ### Build MXNet with MKL-DNN
 
 ```
-make -j $(nproc) USE_OPENCV=1 USE_MKLDNN=1 USE_BLAS=mkl USE_INTEL_PATH=/opt/intel
+make -j $(nproc) USE_OPENCV=1 USE_BLAS=mkl USE_INTEL_PATH=/opt/intel
 ```
 
-If you don't have the full [MKL](https://software.intel.com/en-us/intel-mkl) library installation, you might use OpenBLAS as the blas library, by setting USE_BLAS=openblas.
+For x86 Linux, it will build MXNet with MKL-DNN backend by default. If you want to disable MKL-DNN backend, you can set `USE_MKLDNN=0` explicitily in the command line. Or you can `export MXNET_MKLDNN_ENABLED=0` before running your model if the MXNet binary is already built with MKL-DNN.
+
+For other platforms, you can set `USE_MKLDNN=1` explicitily in the command line to enable MKL-DNN backend. Otherwise, MKL-DNN backend will not be built. Please note that, along with the development and maturing of MKL-DNN backend, the default setting for `USE_MKLDNN` may be changed and MKL-DNN backend will become the default backend for other platforms too.
+
+If you don't have the full [MKL](https://software.intel.com/en-us/intel-mkl) library installed, you might use OpenBLAS as the BLAS library, by setting USE_BLAS=openblas.
 
 <h2 id="2">MacOS</h2>
 
