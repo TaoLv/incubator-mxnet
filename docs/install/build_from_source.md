@@ -170,8 +170,8 @@ There is a configuration file for make,
 ### Build MXNet with MKL-DNN
 - MKL-DNN source code will be downloaded into `3rdparty/mkldnn` when [Clone the repository](#clone-the-mxnet-project).
 - Flag `USE_MKLDNN`can be used to enable or disable MKL-DNN backend in make/cmake command line.
-- For x86 Linux system, `USE_MKLDNN` will be turned on by default. If you want to disable MKL-DNN backend, you need set `USE_MKLDNN=0` explicitily in the make/cmake command line. Or you can export `MXNET_MKLDNN_ENABLED=0` before running your model if the MXNet binary is already built with MKL-DNN.
-- For other platforms, you can set `USE_MKLDNN=1` explicitily in the make/cmake command line to enable MKL-DNN backend. Otherwise, MKL-DNN backend will not be built. Please note that, along with the development and maturing of MKL-DNN backend, the default setting for `USE_MKLDNN` may be changed and MKL-DNN backend will become the default backend for other platforms too.
+- For x86 Linux system, MXNet will be built with MKL-DNN backend by default. If you want to disable MKL-DNN backend, you need set `USE_MKLDNN=0` explicitly in the make/cmake command line. Or you can export `MXNET_MKLDNN_ENABLED=0` before running your model if the MXNet binary is already built with MKL-DNN.
+- For other platforms, MXNet will be built WITHOUT MKL-DNN backend by default. You can set `USE_MKLDNN=1` explicitly in the make/cmake command line to enable MKL-DNN backend. Please note that, along with the development and maturing of MKL-DNN backend, the default setting for `USE_MKLDNN` may be changed and MKL-DNN backend will become the default backend for other platforms too.
 - Please refer [`MKLDNN README`](https://github.com/apache/incubator-mxnet/blob/master/MKLDNN_README.md) for more detailed instructions to build MXNet with MKL-DNN on different platforms.
 
 ### Build MXNet with NCCL
