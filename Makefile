@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-export CC = icc
-export CXX = icpc
+# export CC = icc
+# export CXX = icpc
 
 ROOTDIR = $(CURDIR)
 TPARTYDIR = $(ROOTDIR)/3rdparty
@@ -93,7 +93,9 @@ WARNFLAGS= -Wall -Wsign-compare
 CFLAGS = -DMSHADOW_FORCE_STREAM $(WARNFLAGS)
 
 # for Intel compiler
-CFLAGS += -Qoption,cpp,--new_cilkfor
+ifeq ($(CXX), icpc)
+	CFLAGS += -Qoption,cpp,--new_cilkfor
+endif
 
 ifeq ($(DEV), 1)
 	CFLAGS += -g -Werror
