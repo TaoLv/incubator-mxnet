@@ -43,7 +43,7 @@ $(MKLDNN_LIBFILE):
 	$(MAKE) -C $(MKLDNN_BUILDDIR) VERBOSE=1
 	$(MAKE) -C $(MKLDNN_BUILDDIR) install
 	if [ -f "$(MKLDNN_LIB64FILE)" ]; then \
-		cp $(MKLDNN_LIB64FILE) $(MKLDNN_LIBFILE); \
+		mv $(MKLDNNROOT)/lib64/libmkldnn* $(MKLDNNROOT)/lib/; \
 	fi
 	mkdir -p $(MXNET_LIBDIR)
 	cp $(OMP_LIBFILE) $(MXNET_LIBDIR)
