@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-export CC = icc
-export CXX = icpc
+# export CC = icc
+# export CXX = icpc
 
 ROOTDIR = $(CURDIR)
 TPARTYDIR = $(ROOTDIR)/3rdparty
