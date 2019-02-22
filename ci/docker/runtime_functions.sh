@@ -292,6 +292,7 @@ build_centos7_cpu() {
         USE_BLAS=openblas \
         USE_MKLDNN=0 \
         USE_DIST_KVSTORE=1 \
+        USE_SIGNAL_HANDLER=1 \
         -j$(nproc)
 }
 
@@ -326,6 +327,7 @@ build_centos7_mkldnn() {
         USE_LAPACK=1 \
         USE_LAPACK_PATH=/usr/lib64/liblapack.so \
         USE_BLAS=openblas \
+        USE_SIGNAL_HANDLER=1 \
         -j$(nproc)
 }
 
@@ -365,6 +367,8 @@ build_ubuntu_cpu_openblas() {
         USE_BLAS=openblas             \
         USE_MKLDNN=0                  \
         USE_DIST_KVSTORE=1            \
+        USE_LIBJPEG_TURBO=1           \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -380,6 +384,7 @@ build_ubuntu_cpu_mkl() {
         USE_MKLDNN=0                  \
         USE_INTEL_PATH=/opt/intel     \
         USE_DIST_KVSTORE=1            \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -510,6 +515,7 @@ build_ubuntu_cpu_clang39_mkldnn() {
         USE_CPP_PACKAGE=1             \
         USE_BLAS=openblas             \
         USE_OPENMP=0                  \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -526,6 +532,7 @@ build_ubuntu_cpu_clang60_mkldnn() {
         USE_CPP_PACKAGE=1             \
         USE_BLAS=openblas             \
         USE_OPENMP=1                  \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -539,6 +546,7 @@ build_ubuntu_cpu_mkldnn() {
         ENABLE_TESTCOVERAGE=1         \
         USE_CPP_PACKAGE=1             \
         USE_BLAS=openblas             \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -552,6 +560,7 @@ build_ubuntu_cpu_mkldnn_mkl() {
         ENABLE_TESTCOVERAGE=1         \
         USE_CPP_PACKAGE=1             \
         USE_BLAS=mkl                  \
+        USE_SIGNAL_HANDLER=1          \
         -j$(nproc)
 }
 
@@ -635,6 +644,7 @@ build_ubuntu_gpu_mkldnn() {
         USE_CUDA_PATH=/usr/local/cuda             \
         USE_CUDNN=1                               \
         CUDA_ARCH="$CI_CUDA_COMPUTE_CAPABILITIES" \
+        USE_SIGNAL_HANDLER=1                      \
         -j$(nproc)
 }
 
@@ -651,6 +661,7 @@ build_ubuntu_gpu_mkldnn_nocudnn() {
         USE_CUDA_PATH=/usr/local/cuda             \
         USE_CUDNN=0                               \
         CUDA_ARCH="$CI_CUDA_COMPUTE_CAPABILITIES" \
+        USE_SIGNAL_HANDLER=1                      \
         -j$(nproc)
 }
 
@@ -669,6 +680,7 @@ build_ubuntu_gpu_cuda91_cudnn7() {
         USE_CPP_PACKAGE=1                         \
         USE_DIST_KVSTORE=1                        \
         CUDA_ARCH="$CI_CUDA_COMPUTE_CAPABILITIES" \
+        USE_SIGNAL_HANDLER=1                      \
         -j$(nproc)
 }
 
@@ -870,8 +882,9 @@ unittest_ubuntu_cpu_clojure() {
 
 unittest_ubuntu_cpu_clojure_integration() {
     set -ex
-    make scalapkg USE_OPENCV=1 USE_BLAS=openblas USE_DIST_KVSTORE=1 ENABLE_TESTCOVERAGE=1
-    make scalainstall USE_OPENCV=1 USE_BLAS=openblas USE_DIST_KVSTORE=1 ENABLE_TESTCOVERAGE=1
+    cd scala-package
+    mvn -B install
+    cd ..
     ./contrib/clojure-package/integration-tests.sh
 }
 
@@ -902,6 +915,36 @@ unittest_ubuntu_cpu_R() {
     make rpkgtest R_LIBS=/tmp/r-site-library
 }
 
+unittest_ubuntu_minimal_R() {
+    set -ex
+    mkdir -p /tmp/r-site-library
+    # build R packages in parallel
+    mkdir -p ~/.R/
+    build_ccache_wrappers
+    echo  "MAKEFLAGS = -j"$(nproc) > ~/.R/Makevars
+    # make -j not supported
+    make rpkg                           \
+        USE_BLAS=openblas               \
+        R_LIBS=/tmp/r-site-library
+
+    R CMD INSTALL --library=/tmp/r-site-library R-package
+    # pick mlp as minimal R test
+    R_LIBS=/tmp/r-site-library \
+        Rscript -e "library(mxnet); require(mlbench); \
+                    data(Sonar, package=\"mlbench\"); \
+                    Sonar[,61] = as.numeric(Sonar[,61])-1; \
+                    train.ind = c(1:50, 100:150); \
+                    train.x = data.matrix(Sonar[train.ind, 1:60]); \
+                    train.y = Sonar[train.ind, 61]; \
+                    test.x = data.matrix(Sonar[-train.ind, 1:60]); \
+                    test.y = Sonar[-train.ind, 61]; \
+                    model = mx.mlp(train.x, train.y, hidden_node = 10, \
+                                   out_node = 2, out_activation = \"softmax\", \
+                                   learning.rate = 0.1, \
+                                   array.layout = \"rowmajor\"); \
+                    preds = predict(model, test.x, array.layout = \"rowmajor\")"
+}
+
 unittest_ubuntu_gpu_R() {
     set -ex
     mkdir -p /tmp/r-site-library
@@ -922,6 +965,7 @@ unittest_ubuntu_cpu_julia() {
     export PATH="$1/bin:$PATH"
     export MXNET_HOME='/work/mxnet'
     export JULIA_DEPOT_PATH='/work/julia-depot'
+    export INTEGRATION_TEST=1
 
     julia -e 'using InteractiveUtils; versioninfo()'
 
@@ -1241,7 +1285,7 @@ nightly_tutorial_test_ubuntu_python2_gpu() {
 nightly_java_demo_test_cpu() {
     set -ex
     cd /work/mxnet/scala-package/mxnet-demo/java-demo
-    make java_ci_demo
+    mvn -B -Pci-nightly install
     bash bin/java_sample.sh
     bash bin/run_od.sh
 }
@@ -1249,7 +1293,7 @@ nightly_java_demo_test_cpu() {
 nightly_scala_demo_test_cpu() {
     set -ex
     cd /work/mxnet/scala-package/mxnet-demo/scala-demo
-    make scala_ci_demo
+    mvn -B -Pci-nightly install
     bash bin/demo.sh
     bash bin/run_im.sh
 }

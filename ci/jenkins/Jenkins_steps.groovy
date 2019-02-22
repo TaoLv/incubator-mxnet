@@ -927,6 +927,20 @@ def test_unix_r_cpu() {
     }]
 }
 
+def test_unix_r_mkldnn_cpu() {
+    return ['R: MKLDNN-CPU': {
+      node(NODE_LINUX_CPU) {
+        ws('workspace/ut-r-mkldnn-cpu') {
+          timeout(time: max_time, unit: 'MINUTES') {
+            utils.unpack_and_init('mkldnn_cpu', mx_mkldnn_lib, true)
+            utils.docker_run('ubuntu_cpu', 'unittest_ubuntu_minimal_R', false)
+            utils.publish_test_coverage()
+          }
+        }
+      }
+    }]
+}
+
 def test_unix_perl_cpu() {
     return ['Perl: CPU': {
       node(NODE_LINUX_CPU) {
@@ -1014,7 +1028,7 @@ def test_unix_r_gpu() {
 def test_unix_julia07_cpu() {
     return ['Julia 0.7: CPU': {
       node(NODE_LINUX_CPU) {
-        ws('workspace/ut-julia07-cpu') {
+        ws('workspace/ut-it-julia07-cpu') {
           timeout(time: max_time, unit: 'MINUTES') {
             utils.unpack_and_init('cpu', mx_lib)
             utils.docker_run('ubuntu_cpu', 'unittest_ubuntu_cpu_julia07', false)
@@ -1027,7 +1041,7 @@ def test_unix_julia07_cpu() {
 def test_unix_julia10_cpu() {
     return ['Julia 1.0: CPU': {
       node(NODE_LINUX_CPU) {
-        ws('workspace/ut-julia10-cpu') {
+        ws('workspace/ut-it-julia10-cpu') {
           timeout(time: max_time, unit: 'MINUTES') {
             utils.unpack_and_init('cpu', mx_lib)
             utils.docker_run('ubuntu_cpu', 'unittest_ubuntu_cpu_julia10', false)

@@ -35,7 +35,7 @@
 #include "nnvm/op.h"
 #include "nnvm/tuple.h"
 #include "nnvm/symbolic.h"
-#include "mxfeatures.h"
+#include "libinfo.h"
 
 
 /*!
@@ -233,6 +233,10 @@ struct RunContext {
    */
   void *stream;
   /*!
+   * \brief indicator of whether this execution is run in bulk mode
+   */
+  bool is_bulk;
+  /*!
    * \brief get mshadow stream from Context
    * \return the mshadow stream
    * \tparam xpu the device type of the stream
@@ -399,7 +403,14 @@ template<> struct hash<mxnet::Context> {
     return res;
   }
 };
+
+#if __cplusplus < 201402L && !defined(_MSC_VER)
+template<typename T, typename... Args>
+inline std::unique_ptr<T> make_unique(Args&&... args) {
+  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
+#endif
+}  // namespace std
 
 #include "./tensor_blob.h"
 //! \endcond
