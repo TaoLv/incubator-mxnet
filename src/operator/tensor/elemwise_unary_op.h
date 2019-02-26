@@ -385,18 +385,12 @@ class UnaryOp : public OpBase {
     if (req[0] == kNullOp)  return;
     auto type_flag = inputs[0].type_flag_;
     size_t input_size = inputs[0].Size();
-    if (req[0] == kWriteTo &&
+    if ((req[0] == kWriteTo || req[0] == kWriteInplace) &&
         mkl_func::check_size(input_size) &&
         mkl_func::check_type(type_flag)) {
       // set DType as float or double according to type_flag
       MSHADOW_SGL_DBL_TYPE_SWITCH(type_flag, DType, {
         MKL_OP::Map(input_size, inputs[0].dptr<DType>(), outputs[0].dptr<DType>());
-      });
-    } else if (req[0] == kWriteInplace  &&
-        mkl_func::check_size(input_size) &&
-        mkl_func::check_type(type_flag)) {
-      MSHADOW_SGL_DBL_TYPE_SWITCH(type_flag, DType, {
-        MKL_OP::Map(input_size, inputs[0].dptr<DType>(), inputs[0].dptr<DType>());
       });
     } else {
       Compute<cpu, OP>(attrs, ctx, inputs, req, outputs);

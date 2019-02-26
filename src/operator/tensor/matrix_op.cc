@@ -227,14 +227,14 @@ If the argument `reverse` is set to 1, then the special values are inferred from
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_reshape"})
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-#if MXNET_USE_MKLDNN == 1
-.set_attr<bool>("TIsMKLDNN", true)
-.set_attr<FComputeEx>("FComputeEx<cpu>", ReshapeComputeExCPU)
-.set_attr<FInferStorageType>("FInferStorageType", ReshapeStorageType)
-.set_attr<FResourceRequest>("FResourceRequest", [](const NodeAttrs& n) {
-  return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
-})
-#else
+// #if MXNET_USE_MKLDNN == 1
+// .set_attr<bool>("TIsMKLDNN", true)
+// .set_attr<FComputeEx>("FComputeEx<cpu>", ReshapeComputeExCPU)
+// .set_attr<FInferStorageType>("FInferStorageType", ReshapeStorageType)
+// .set_attr<FResourceRequest>("FResourceRequest", [](const NodeAttrs& n) {
+//   return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+// })
+// #else
 .set_attr<nnvm::FInplaceOption>("FInplaceOption",
   [](const NodeAttrs& attrs) {
     return std::vector<std::pair<int, int> >{{0, 0}};
@@ -243,7 +243,7 @@ If the argument `reverse` is set to 1, then the special values are inferred from
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};
   })
-#endif
+// #endif
 .add_argument("data", "NDArray-or-Symbol", "Input data to reshape.")
 .add_arguments(ReshapeParam::__FIELDS__());
 
