@@ -39,6 +39,10 @@
 #include "../mxnet_op.h"
 #include "../tensor/broadcast_reduce_op.h"
 
+#if MSHADOW_USE_MKL == 1
+#include <mkl.h>
+#endif
+
 namespace mxnet {
 namespace op {
 
@@ -63,6 +67,24 @@ struct LayerNormParam : public dmlc::Parameter<LayerNormParam> {
   }
 };
 
+#if MSHADOW_USE_MKL == 1
+void sub_(int n, float * __restrict__ in, float b, float * __restrict__ dst){
+  for(int i = 0; i<n; i++)
+    dst[i] = in[i] - b;
+}
+
+void div_(int n, float * __restrict__ in, float b, float * __restrict__ dst){
+  for(int i = 0; i<n; i++)
+    dst[i] = in[i] / b;
+}
+
+void sum_(int n, float * __restrict__ in, float * __restrict__ dst){
+  // dst[0] = cblas_sasum(n, in, 1);
+  for (int i = 0; i < n; i++)
+    dst[0] += in[i];
+}
+
+#endif
 
 template<typename xpu>
 void LayerNormCompute(const nnvm::NodeAttrs& attrs,
@@ -71,6 +93,7 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
                       const std::vector<TBlob>& outputs) {
   using namespace mshadow;
   using namespace mshadow::expr;
+
   const LayerNormParam& param = nnvm::get<LayerNormParam>(attrs.parsed);
   if (req[0] == kNullOp) return;
   CHECK_NE(req[0], kAddTo);
@@ -78,6 +101,7 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
   if (axis < 0) {
     axis += static_cast<int>(inputs[0].ndim());
   }
+
   CHECK(axis >= 0 && axis < inputs[0].ndim()) << "Channel axis out of range: " << param.axis;
   CHECK_EQ(inputs.size(), 3U);
   Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -88,12 +112,14 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
       new_param_shape[i] = 1;
     }
   }
+
   const TBlob gamma = inputs[1].reshape(new_param_shape);
   const TBlob beta = inputs[2].reshape(new_param_shape);
   // Compute necessary data for the reduce operation.
   TShape red_src_shape, red_dst_shape;
   BroadcastReduceShapeCompact(inputs[0].shape_, outputs[layernorm::kMean].shape_,
                               &red_src_shape, &red_dst_shape);
+
   const TBlob in_data = inputs[0].reshape(red_src_shape);
   const TBlob mean_data = outputs[layernorm::kMean].reshape(red_dst_shape);
   const TBlob std_data = outputs[layernorm::kStd].reshape(red_dst_shape);
@@ -107,7 +133,44 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
         broadcast::ReduceWorkspaceSize<NDim, DType>(s, mean_data.shape_, req[0], in_data.shape_);
     });
   });
+#if MSHADOW_USE_MKL == 1
+  workspace_size = in_data.shape_.Size() * sizeof (float);
+#endif
   workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s);
+
+#if MSHADOW_USE_MKL == 1
+  // optimization only supports axis = last dimension
+  if (axis = in_data.shape_.ndim() - 1) {
+    float* ws_ptr = reinterpret_cast<float*>(workspace.dptr_);
+    float* in_ptr = reinterpret_cast<float*>(in_data.dptr_);
+    float* out_ptr = reinterpret_cast<float*>(outputs[0].dptr_);
+    float* gamma_ptr = reinterpret_cast<float*>(gamma.dptr_);
+    float* beta_ptr = reinterpret_cast<float*>(beta.dptr_);
+    float* mean_ptr = reinterpret_cast<float*>(mean_data.dptr_);
+    float* var_ptr = reinterpret_cast<float*>(std_data.dptr_);
+    const int M = in_data.shape_[0];
+    const int N = in_data.shape_[1];
+
+#pragma omp parallel for
+    for (int i = 0; i < M; i++) {
+      float* in_offset = in_ptr + i * N;
+      float* out_offset = out_ptr + i * N;
+      float* ws_offset = ws_ptr + i * N;
+      sum_(N, in_offset, &(mean_ptr[i]));
+      mean_ptr[i] /= N;
+      sub_(N, in_offset, mean_ptr[i], out_offset);
+
+      vsSqr(N, out_offset, ws_offset);
+      sum_(N, ws_offset, &(var_ptr[i]));
+      var_ptr[i] = sqrt(var_ptr[i] / N + param.eps);
+
+      vsMul(N, out_offset, gamma_ptr, out_offset);
+      div_(N, out_offset, var_ptr[i], out_offset);
+      vsAdd(N, out_offset, beta_ptr, out_offset);
+    }
+    return;
+  }
+#else
   // Calculate mean
   MSHADOW_REAL_TYPE_SWITCH(outputs[0].type_flag_, DType, {
     BROADCAST_NDIM_SWITCH(red_dst_shape.ndim(), NDim, {
@@ -144,6 +207,7 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
   BinaryBroadcastCompute<xpu, op::mshadow_op::plus>(attrs, ctx,
                                                    {outputs[0], beta},
                                                    {kWriteTo}, {outputs[0]});
+#endif
 }
 
 /*
