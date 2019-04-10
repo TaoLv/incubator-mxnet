@@ -31,6 +31,10 @@
 #include "mkldnn/mkldnn_ops-inl.h"
 #endif
 
+#if MSHADOW_USE_MKL == 1
+#include "mkl.h"
+#endif
+
 namespace mxnet {
 namespace op {
 DMLC_REGISTER_PARAMETER(SoftmaxParam);
@@ -67,6 +71,53 @@ inline static bool SoftmaxStorageType(const nnvm::NodeAttrs& attrs,
 }
 #endif
 
+#if MSHADOW_USE_MKL == 1
+static void SoftmaxComputeCPU(const nnvm::NodeAttrs& attrs,
+                    const OpContext& ctx,
+                    const std::vector<TBlob>& inputs,
+                    const std::vector<OpReqType>& req,
+                    const std::vector<TBlob>& outputs) {
+  if (req[0] == kNullOp) return;
+  CHECK_NE(req[0], kAddTo);
+  const SoftmaxParam& param = nnvm::get<SoftmaxParam>(attrs.parsed);
+  int axis = CheckAxis(param.axis, inputs[0].ndim());
+
+  if (param.temperature.has_value() ||
+      axis != inputs[0].ndim() - 1 || 
+      inputs[0].type_flag_ != mshadow::kFloat32) {
+    SoftmaxCompute<cpu, mxnet_op::softmax_fwd>(attrs, ctx, inputs, req, outputs);
+    return;
+  }
+
+  auto in_shape = inputs[0].shape_;
+  auto in_ptr = inputs[0].dptr<float>();
+  auto out_ptr = outputs[0].dptr<float>();
+
+  // prod shape
+  int ou = 1;
+  for (auto &v : in_shape) ou *= v;
+
+  const int ch = in_shape[axis];
+  ou /= ch;
+
+#pragma omp parallel for num_threads(engine::OpenMP::Get()->GetRecommendedOMPThreadCount())
+  for (int o = 0; o < ou; o++) {
+    float* in_offset = in_ptr + o * ch;
+    float* ou_offset = out_ptr + o * ch;
+
+    vsExp(ch, in_offset, ou_offset);
+    float sum = 0.0f;
+    for (int c = 0; c < ch; c++) {
+      sum += ou_offset[c];
+    }
+
+    for (int c = 0; c < ch; c++) {
+      ou_offset[c] /= sum;
+    }
+  }
+}
+#endif
+
 NNVM_REGISTER_OP(softmax)
 .describe(R"code(Applies the softmax function.
 
@@ -96,12 +147,16 @@ Example::
     [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"output"};
 })
+#if MSHADOW_USE_MKL == 1
+.set_attr<FCompute>("FCompute<cpu>", SoftmaxComputeCPU)
+#else
 .set_attr<FCompute>("FCompute<cpu>", SoftmaxCompute<cpu, mxnet_op::softmax_fwd>)
-#if MXNET_USE_MKLDNN == 1
-.set_attr<bool>("TIsMKLDNN", true)
-.set_attr<FComputeEx>("FComputeEx<cpu>", SoftmaxComputeExCPU)
-.set_attr<FInferStorageType>("FInferStorageType", SoftmaxStorageType)
 #endif
+// #if MXNET_USE_MKLDNN == 1
+// .set_attr<bool>("TIsMKLDNN", true)
+// .set_attr<FComputeEx>("FComputeEx<cpu>", SoftmaxComputeExCPU)
+// .set_attr<FInferStorageType>("FInferStorageType", SoftmaxStorageType)
+// #endif
 .set_attr<nnvm::FGradient>("FGradient", SoftmaxFGradient{"_backward_softmax"})
 .set_attr<nnvm::FInferType>("FInferType", SoftmaxOpType)
 .set_num_inputs(1)
