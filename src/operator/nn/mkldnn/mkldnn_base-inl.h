@@ -185,7 +185,7 @@ bool SupportMKLDNNAct(const ActivationParam& param);
 bool SupportMKLDNNAct(const ActivationParam& param, const NDArray &input);
 bool SupportMKLDNNConv(const ConvolutionParam& params, const NDArray &input);
 bool SupportMKLDNNDeconv(const DeconvolutionParam& params, const NDArray &input);
-bool SupportMKLDNNSoftmax(const SoftmaxParam& param, const NDArray &input, const NDArray &output);
+bool SupportMKLDNNSoftmax(const SoftmaxParam& param);
 bool SupportMKLDNNSoftmaxOutput(const SoftmaxOutputParam &param);
 bool SupportMKLDNNTranspose(const TransposeParam& param, const NDArray &data);
 }  // namespace op

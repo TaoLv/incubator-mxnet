@@ -578,7 +578,7 @@ struct ReshapeLikeParam : public dmlc::Parameter<ReshapeLikeParam> {
   NNVM_REGISTER_OP(__name$)                                         \
   .set_num_inputs(1)                                                \
   .set_num_outputs(1)                                               \
-  .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
+  .set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
