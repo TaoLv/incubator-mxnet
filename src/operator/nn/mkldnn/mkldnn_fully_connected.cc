@@ -245,6 +245,18 @@ void MKLDNNFCForwardFullFeature(const MKLDNNFCFullParam &full_param,
   NDArray data = in_data[fullc::kData];
 
   auto data_mem = data.GetMKLDNNDataReorder(fwd->fwd_pd.src_primitive_desc());
+  auto debug_fc = dmlc::GetEnv("MXNET_DEBUG_FC", false);
+  if (debug_fc) {
+    printf("================= fc %d %d x %d %d ========= \n", data.shape()[0], data.shape()[1], weight.shape()[0], weight.shape()[1]);
+    MSHADOW_TYPE_SWITCH(data.dtype(), DTYPE, {
+      printf("print data of FullyConnected \n");
+      auto debug_ptr = reinterpret_cast<DTYPE*>(data_mem->get_data_handle());
+      for (int i = 0; i < 10; i++) {
+        printf("%f    ", debug_ptr[i]);
+      }
+      printf("\n\n");
+    });
+  }
   const mkldnn::memory *weight_mem;
   if (ctx.is_train) {
     if (weight.IsMKLDNNData()) {
@@ -260,6 +272,17 @@ void MKLDNNFCForwardFullFeature(const MKLDNNFCFullParam &full_param,
       CHECK(weight_mem->get_primitive_desc() == fwd->fwd_pd.weights_primitive_desc());
     }
   }
+  if (debug_fc) {
+    MSHADOW_TYPE_SWITCH(weight.dtype(), DTYPE, {
+      printf("print weight of FullyConnected \n");
+      auto debug_ptr = reinterpret_cast<DTYPE*>(weight_mem->get_data_handle());
+      for (int i = 0; i < 10; i++) {
+        printf("%f    ", debug_ptr[i]);
+      }
+      printf("\n\n");
+    });
+  }
+
   auto out_mem = CreateMKLDNNMem(out_data[fullc::kOut],
       fwd->fwd_pd.dst_primitive_desc(), req[fullc::kOut], &data);
   if (!full_param.default_param.no_bias) {
@@ -272,6 +295,16 @@ void MKLDNNFCForwardFullFeature(const MKLDNNFCFullParam &full_param,
   MKLDNNStream::Get()->RegisterPrim(fwd->GetFwd());
   CommitOutput(out_data[fullc::kOut], out_mem);
   MKLDNNStream::Get()->Submit();
+  if (debug_fc) {
+    MSHADOW_TYPE_SWITCH(out_data[fullc::kOut].dtype(), DTYPE, {
+      printf("print output of FullyConnected \n");
+      auto debug_ptr = reinterpret_cast<DTYPE*>(out_data[fullc::kOut].GetMKLDNNData()->get_data_handle());
+      for (int i = 0; i < 10; i++) {
+        printf("%f    ", debug_ptr[i]);
+      }
+      printf("\n\n");
+    });
+  }
 }
 
 void MKLDNNFCForward(const nnvm::NodeAttrs &attrs, const OpContext &ctx,
