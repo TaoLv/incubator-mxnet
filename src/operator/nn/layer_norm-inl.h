@@ -140,7 +140,7 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
 
 #if MSHADOW_USE_MKL == 1
   // optimization only supports axis = last dimension
-  if (axis == in_data.shape_.ndim() - 1) {
+  if (axis == inputs[0].shape_.ndim() - 1) {
     float* ws_ptr = reinterpret_cast<float*>(workspace.dptr_);
     float* in_ptr = reinterpret_cast<float*>(in_data.dptr_);
     float* out_ptr = reinterpret_cast<float*>(outputs[0].dptr_);
