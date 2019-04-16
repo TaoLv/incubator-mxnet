@@ -79,6 +79,13 @@
 #endif
 #endif
 
+#ifdef __INTEL_COMPILER
+#if __INTEL_COMPILER < 1900
+#error "Need icc/icpc 19.0.0 or higher version to build mxnet"
+#endif
+#endif
+
+
 /*!
  * \brief define dllexport for Visual Studio
  */
