@@ -19,6 +19,7 @@ ifeq ($(USE_MKLDNN), 1)
 	MKLDNN_SUBMODDIR = $(ROOTDIR)/3rdparty/mkldnn
 	MKLDNN_BUILDDIR = $(MKLDNN_SUBMODDIR)/build
 	MXNET_LIBDIR = $(ROOTDIR)/lib
+	MKLMLPACKAGE = $(MKLDNN_SUBMODDIR)/external/mklml_lnx_2019.0.3.20190220.tgz
 ifeq ($(UNAME_S), Darwin)
 	OMP_LIBFILE = $(MKLDNNROOT)/lib/libiomp5.dylib
 	MKLML_LIBFILE = $(MKLDNNROOT)/lib/libmklml.dylib
@@ -38,7 +39,17 @@ mkldnn_build: $(MKLDNN_LIBFILE)
 
 $(MKLDNN_LIBFILE):
 	mkdir -p $(MKLDNNROOT)
-	cd $(MKLDNN_SUBMODDIR) && rm -rf external && cd scripts && ./prepare_mkl.sh && cd .. && cp -a external/*/* $(MKLDNNROOT)/.
+	cd $(MKLDNN_SUBMODDIR)
+	if [ -e "$(MKLMLPACKAGE)" ]; then \
+		tar -xzf $(MKLMLPACKAGE) -C $(MKLDNN_SUBMODDIR)/external/; \
+	else \
+		rm -rf $(MKLDNN_SUBMODDIR)/external; \
+		cd $(MKLDNN_SUBMODDIR)/scripts; \
+		./prepare_mkl.sh; \
+		cd $(MKLDNN_SUBMODDIR); \
+	fi
+	cp -a $(MKLDNN_SUBMODDIR)/external/*/* $(MKLDNNROOT)/.
+
 	cmake $(MKLDNN_SUBMODDIR) -DCMAKE_INSTALL_PREFIX=$(MKLDNNROOT) -B$(MKLDNN_BUILDDIR) -DARCH_OPT_FLAGS="-mtune=generic" -DWITH_TEST=OFF -DWITH_EXAMPLE=OFF
 	$(MAKE) -C $(MKLDNN_BUILDDIR) VERBOSE=1
 	$(MAKE) -C $(MKLDNN_BUILDDIR) install
