@@ -39,7 +39,7 @@
 namespace mxnet {
 namespace op {
 
-algorithm GetMKLDNNRNNAlgo(int mode,
+static algorithm GetMKLDNNRNNAlgo(int mode,
                            int* ngates,
                            int* nstates) {
   algorithm algo = algorithm::vanilla_rnn;
@@ -67,7 +67,7 @@ algorithm GetMKLDNNRNNAlgo(int mode,
   return algo;
 }
 
-void ConcatData(mkldnn::memory::format src_format,
+static void ConcatData(mkldnn::memory::format src_format,
                 mkldnn::memory::format dst_format,
                 std::vector<mkldnn::memory::dims> srcs_cds,
                 mkldnn::memory::dims dst_cds,
@@ -102,7 +102,7 @@ void ConcatData(mkldnn::memory::format src_format,
 //  for unidirectional, it will fused as dim like 1  + (L - 1) when I != H.
 //  for bidirectional, it will fused as data + back_data (weight, bias, iter etc),
 //  also need to identify first layer and next layers
-inline size_t GetMKLDNNRNNCacheMemorySize(int L,
+static size_t GetMKLDNNRNNCacheMemorySize(int L,
                                           int D,
                                           int T,
                                           int N,
@@ -135,7 +135,7 @@ inline size_t GetMKLDNNRNNCacheMemorySize(int L,
 }
 
 template <typename DType>
-void AdjustGruWeightGateOrder(DType* weight,
+static void AdjustGruWeightGateOrder(DType* weight,
                               const int I,
                               const int H) {
   // mxnet gru gate order is reset, update and new gates
@@ -152,7 +152,7 @@ void AdjustGruWeightGateOrder(DType* weight,
 }
 
 template <typename DType>
-void AdjustGruBiasGateOrder(DType* bias,
+static void AdjustGruBiasGateOrder(DType* bias,
                             const int H) {
   // mxnet gru gate order is reset, update and new gates
   // mkldnn gru gate order is update, reset and new gates
@@ -171,7 +171,7 @@ void AdjustGruBiasGateOrder(DType* bias,
 // unidirectional will be done by fused 1 + fused (L - 1) layers or fused L layers(when I = H)
 
 template <typename DType>
-void MKLDNNRNNForwardSingleLayerBi(bool state_outputs,
+static void MKLDNNRNNForwardSingleLayerBi(bool state_outputs,
                                    const int T,
                                    const int N,
                                    const int I,
@@ -369,7 +369,7 @@ void MKLDNNRNNForwardSingleLayerBi(bool state_outputs,
 
 
 template <typename DType>
-void MKLDNNRNNForwardUnidi(bool state_outputs,
+static void MKLDNNRNNForwardUnidi(bool state_outputs,
                            const int L,
                            const int T,
                            const int N,
@@ -576,7 +576,7 @@ void MKLDNNRNNForwardUnidi(bool state_outputs,
 }
 
 template <typename DType>
-void MKLDNNRNNForward(bool state_outputs,
+static void MKLDNNRNNForward(bool state_outputs,
                       const int L,
                       const int D,
                       const int T,
@@ -686,7 +686,7 @@ void MKLDNNRNNForward(bool state_outputs,
 }
 
 template <typename DType>
-void MKLDNNRNNForwardInference(bool state_outputs,
+static void MKLDNNRNNForwardInference(bool state_outputs,
                                const int num_layers,
                                const int direction,
                                const int seq_length,
