@@ -336,6 +336,9 @@ void ThreadedEngine::PushAsync(AsyncFn fn, Context exec_ctx,
   ThreadedOpr *opr = NewOperator(std::move(fn), const_vars, mutable_vars, prop, opr_name, wait);
   opr->temporary = true;
   const bool profiling = profiler_->IsProfiling(profiler::Profiler::kImperative);
+  if (exec_ctx.dev_type == Context::kCPUShared) {
+    exec_ctx.dev_type = Context::kCPU;
+  }
   Push(opr, exec_ctx, priority, profiling);
 }
 
