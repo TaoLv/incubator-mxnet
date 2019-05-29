@@ -32,6 +32,7 @@
 #include <mxnet/imperative.h>
 #include <mshadow/tensor.h>
 #if MXNET_USE_MKLDNN == 1
+#include <mkl.h>
 #include <mkldnn.hpp>
 #endif
 #include "./ndarray_function.h"
@@ -1090,15 +1091,20 @@ inline void CopyFromToRspImpl(const NDArray& from, const NDArray& to, RunContext
 // Make a copy of a dense NDArray
 template<typename from_xpu, typename to_xpu>
 inline void CopyFromToDnsImpl(const NDArray& from, const NDArray& to, RunContext ctx) {
+// const int si = from.shape().Size();
+// double a = 0.0f, b=0.0f, c=0.0f, tic, toc;
+// tic = dsecnd();
 #if MXNET_USE_MKLDNN == 1
   // If neither is MKLDNN, we can copy data normally.
   if (!from.IsMKLDNNData() && !to.IsMKLDNNData()) {
 #endif
+// tic = dsecnd();
     using namespace mshadow;
     CHECK_EQ(from.storage_type(), to.storage_type()) << "Copying with different storage type";
     TBlob tmp = to.data();
     ndarray::Copy<from_xpu, to_xpu>(from.data(), &tmp,
                                     from.ctx(), to.ctx(), ctx);
+// a = dsecnd() - tic;
 #if MXNET_USE_MKLDNN == 1
   } else if (SupportMKLDNN(from.dtype(), from.shape())
              && SupportMKLDNN(to.dtype(), to.shape())
@@ -1106,6 +1112,7 @@ inline void CopyFromToDnsImpl(const NDArray& from, const NDArray& to, RunContext
              && to.ctx().dev_mask() == cpu::kDevMask) {
     // If we copy data directly, we need to make sure both NDArrays are supported
     // by MKLDNN.
+ // tic = dsecnd();
     auto from_mem = from.GetMKLDNNData();
     auto to_mem = to.GetMKLDNNData();
     if (from_mem->get_primitive_desc() == to_mem->get_primitive_desc()) {
@@ -1116,10 +1123,12 @@ inline void CopyFromToDnsImpl(const NDArray& from, const NDArray& to, RunContext
       const_cast<NDArray &>(to).CopyFrom(*from_mem);
       MKLDNNStream::Get()->Submit();
     }
+// b = dsecnd() - tic;
   } else {
     // In this case, one of the NDArray isn't supported by MKLDNN, we need
     // to convert the MKLDNN array to the default format first and copy data
     // with Copy().
+// tic = dsecnd();
     NDArray tmp_from = from;
     if (tmp_from.IsMKLDNNData()) {
       // TODO(zhengda) tmp_from should be cached.
@@ -1133,8 +1142,10 @@ inline void CopyFromToDnsImpl(const NDArray& from, const NDArray& to, RunContext
     TBlob tmp = to.data();
     ndarray::Copy<from_xpu, to_xpu>(tmp_from.data(), &tmp,
                                     from.ctx(), to.ctx(), ctx);
+// c = dsecnd() - tic;
   }
 #endif
+// if (si == 1) printf("a %.8f, b %.8f, c %.8f \n", a*1000, b*1000, c*1000);
 }
 
 // Make a copy of an NDArray based on storage type
@@ -1179,7 +1190,10 @@ void CopyFromToImpl(const NDArray& from, const NDArray& to,
     }
 
     if (to_stype == kDefaultStorage) {
+// double tic = dsecnd();
       CopyFromToDnsImpl<from_xpu, to_xpu>(casted_nd, to, rctx);
+// double toc = dsecnd();
+// if (casted_nd.shape().Size()== 1) printf("CopyFromToImpl<cpu, cpu>: %.8f ms, size %d \n", (toc - tic)*1000, casted_nd.shape().Size());
     } else if (to_stype == kRowSparseStorage) {
       CopyFromToRspImpl<from_xpu, to_xpu>(casted_nd, to, rctx);
     } else if (to_stype == kCSRStorage) {

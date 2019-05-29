@@ -25,6 +25,7 @@
 */
 
 #include "./indexing_op.h"
+#include "mkl.h"
 namespace mxnet {
 namespace op {
 
@@ -49,6 +50,40 @@ struct TakeCPU {
     std::memcpy(out_data + i * M, in_data + j * M, M * sizeof(DType));
   }
 };
+
+
+#define MIN(a, b) ((a < b) ? a : b)
+
+template<typename DType, typename IType>
+void take_axis0_clip_func(DType* __restrict__ out_data, const DType* __restrict__ in_data, const IType* __restrict__ idx,
+                     const int N, const int M, const int K) {
+  static int omp_threads = mxnet::engine::OpenMP::Get()->GetRecommendedOMPThreadCount();
+  const int blk_size = 64/sizeof(DType);
+  if (M == 1) {
+#pragma omp parallel for num_threads(omp_threads)
+    for (int blk = 0; blk < N; blk += blk_size) {
+      int blk_bound = MIN(blk + blk_size, N);
+      for (int i = blk; i < blk_bound; i++) {
+        int j = static_cast<int>(idx[i]);
+        // if (j <= 0) j = 0;
+        // else if (j >= K) j = K - 1;
+        out_data[i] = in_data[j];
+      }
+    }
+  } else {
+    const int len = M * sizeof (DType);
+// #pragma omp parallel for num_threads(omp_threads)
+    for (int i = 0; i < N; i++) {
+      int j = static_cast<int>(idx[i]);
+      // if (j <= 0) j = 0;
+      // else if (j >= K) j = K - 1;
+      memcpy(reinterpret_cast<void*>(out_data + i * M),
+             reinterpret_cast<const void*>(in_data + j * M),
+             len);
+    }
+  }
+}
+ 
 
 /*
  * \brief returns true if all indices are between [min, max]
@@ -80,18 +115,24 @@ void EmbeddingOpForwardDnsImpl<cpu>(mshadow::Stream<cpu>* s,
   using namespace mxnet_op;
   const mxnet::TShape& ishape = data.shape_;
   const mxnet::TShape& oshape = output.shape_;
-
+int a, b;
+double tic = dsecnd();
   MSHADOW_TYPE_SWITCH(output.type_flag_, DType, {
     MSHADOW_TYPE_SWITCH(data.type_flag_, IType, {
       Tensor<cpu, 1, IType> idx = data.get_with_shape<cpu, 1, IType>(
         Shape1(ishape.ProdShape(0, ishape.ndim())), s);
       Tensor<cpu, 2, DType> wmat = weight.get<cpu, 2, DType>(s);
+a = wmat.shape_[0];
+b = wmat.shape_[1];
       Tensor<cpu, 2, DType> out = output.get_with_shape<cpu, 2, DType>(
         Shape2(oshape.ProdShape(0, oshape.ndim()-1), oshape[oshape.ndim()-1]), s);
-      Kernel<TakeCPU<true>, cpu>::Launch(s, oshape.Size() / wmat.shape_[1], out.dptr_, wmat.dptr_,
-                                         idx.dptr_, wmat.shape_[1], wmat.shape_[0]);
+      // Kernel<TakeCPU<true>, cpu>::Launch(s, oshape.Size() / wmat.shape_[1], out.dptr_, wmat.dptr_,
+      //                                    idx.dptr_, wmat.shape_[1], wmat.shape_[0]);
+      take_axis0_clip_func(out.dptr_, wmat.dptr_, idx.dptr_, oshape.Size() / b, b, a);
     });
   });
+
+// printf("embedding: %d %d %d, %.8f ms\n", oshape.Size()/b, a, b, (dsecnd()-tic)*1000);
 }
 
 template<>

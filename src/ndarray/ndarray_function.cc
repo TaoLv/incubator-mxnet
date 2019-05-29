@@ -29,26 +29,49 @@
 #include "../operator/mxnet_op.h"
 #include "../operator/tensor/elemwise_binary_op-inl.h"
 #include "../operator/tensor/elemwise_sum.h"
-
+#include "mkl.h"
 namespace mxnet {
 namespace ndarray {
+
+template<typename SrcDType, typename DstDType>
+void CastCopy(DstDType* to, SrcDType* from, int size) {
+        if (size < 200000) {
+#pragma omp simd
+          for (int i=0; i < size; i++) {
+             to[i] = (DstDType)(from[i]);
+	  }
+        } else {
+#pragma omp parallel for
+          for (int i=0; i < size; i++) {
+             to[i] = (DstDType)(from[i]);
+	  }
+}
+}
+
 template<>
 void Copy<cpu, cpu>(const TBlob &from, TBlob *to,
                     Context from_ctx, Context to_ctx,
                     RunContext ctx) {
   MSHADOW_TYPE_SWITCH(to->type_flag_, DType, {
+     const index_t size = from.Size();
     if (to->type_flag_ == from.type_flag_) {
-      const index_t size = from.Size();
+// double tic = dsecnd();
       CHECK_EQ(size, to->Size()) << "copying size mismatch, from: " << size * sizeof(DType)
                << " bytes, to: " << to->Size() * sizeof(DType) << " bytes.";
       common::ParallelCopy(to->dptr<DType>(), from.dptr<DType>(), size);
+// printf("Copy 1: %.8f ms \n", (dsecnd() - tic)*1000);
     } else {
+// double tic = dsecnd();
       MSHADOW_TYPE_SWITCH(from.type_flag_, SrcDType, {
-          to->FlatTo1D<cpu, DType>() =
-              mshadow::expr::tcast<DType>(from.FlatTo1D<cpu, SrcDType>());
-      })
+	auto to_ptr = to->dptr<DType>();
+	auto src_ptr = from.dptr<SrcDType>();
+	CastCopy(to_ptr, src_ptr, size);
+          // to->FlatTo1D<cpu, DType>() =
+          //     mshadow::expr::tcast<DType>(from.FlatTo1D<cpu, SrcDType>());
+      });
+// printf("Copy 2: %.8f ms %d %d \n", (dsecnd() - tic)*1000, from.type_flag_, to->type_flag_);
     }
-  })
+  });
 }
 
 template<typename DType, typename IType>

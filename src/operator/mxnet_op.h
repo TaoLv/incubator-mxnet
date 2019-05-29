@@ -683,7 +683,7 @@ struct Kernel<OP, cpu> {
   static void LaunchTuned(mshadow::Stream<cpu> *, const size_t N, Args... args) {
 #ifdef _OPENMP
     const int omp_threads = engine::OpenMP::Get()->GetRecommendedOMPThreadCount();
-    if (omp_threads < 2 || !tuned_op<PRIMITIVE_OP, DType>::UseOMP(
+    if (omp_threads < 2 || N < 10000 || !tuned_op<PRIMITIVE_OP, DType>::UseOMP(
       N, static_cast<size_t>(omp_threads))) {
       for (size_t i = 0; i < N; ++i) {
         OP::Map(i, args...);

@@ -45,7 +45,7 @@
 
 #if MXNET_USE_MKL_DROPOUT
 #include <omp.h>
-
+#include "mkl.h"
 #include <mkl_vml_functions.h>
 #include <mkl_vsl.h>
 #endif  // MXNET_USE_MKL_DROPOUT
@@ -398,9 +398,18 @@ class DropoutOp {
           }
         }
       } else {
+if (req[dropout::kOut] == kWriteInplace) return;
         MXNET_ASSIGN_REQ_SWITCH(req[dropout::kOut], Req, {
+
+if (Req == kWriteTo) {
+  common::ParallelCopy(out.dptr<DType>(), in.dptr<DType>(), out.Size());
+} else {
+  LOG(FATAL)<<"unsupport dropout req" << Req;
+}
+/*
           mxnet_op::Kernel<mxnet_op::op_with_req<mshadow_op::identity, Req>, xpu>::Launch(
             s, out.Size(), out.dptr<DType>(), in.dptr<DType>());
+*/
         });
       }
     }
@@ -499,8 +508,12 @@ void DropoutCompute(const OpStatePtr& state,
                     const std::vector<OpReqType>& req,
                     const std::vector<TBlob>& outputs) {
   MSHADOW_REAL_TYPE_SWITCH(inputs[0].type_flag_, DType, {
+double tic = dsecnd();
     DropoutOp<xpu, DType>& op = state.get_state<DropoutOp<xpu, DType>>();
+double a = dsecnd() - tic;
+tic = dsecnd();
     op.Forward(ctx, inputs, req, outputs);
+printf("DropoutCompute: req %d, %.8f ms, %.8f ms \n", req[0], (dsecnd() - tic)*1000, a*1000);
   });
 }
 
