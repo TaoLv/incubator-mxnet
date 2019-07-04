@@ -76,6 +76,41 @@ void L2NormComputeEx<cpu>(const nnvm::NodeAttrs& attrs,
   }
 }
 
+template<typename DType>
+void broadcast_ker(DType* src,
+                   DType* dst,
+                   index_t outer,
+                   index_t inner,
+                   index_t size) {
+#pragma omp parallel for num_threads(engine::OpenMP::Get()->GetRecommendedOMPThreadCount())
+  for (index_t i = 0; i < outer * size; i++) {
+    const index_t m = i / size;
+    const index_t n = i % size;
+    void* offset = reinterpret_cast<void*>(dst + m * size * inner + n * inner);
+    memcpy(offset, reinterpret_cast<void*>(src + m * inner), inner * sizeof (DType));
+  }
+}
+
+inline void BroadcastAxisCompute(const nnvm::NodeAttrs& attrs,
+                                 const OpContext& ctx,
+                                 const std::vector<TBlob>& inputs,
+                                 const std::vector<OpReqType>& req,
+                                 const std::vector<TBlob>& outputs) {
+  using namespace mshadow;
+  const BroadcastAxesParam& param = nnvm::get<BroadcastAxesParam>(attrs.parsed);
+  if (param.axis.ndim() == 1 && inputs[0].shape_[param.axis[0]] == 1 && req[0] == kWriteTo) {
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      auto dst = outputs[0].dptr<DType>();
+      auto src = inputs[0].dptr<DType>();
+      index_t outer = inputs[0].shape_.ProdShape(0, param.axis[0]);
+      index_t inner = inputs[0].shape_.ProdShape(param.axis[0], inputs[0].shape_.ndim());
+      broadcast_ker(src, dst, outer, inner, param.size[0]);
+    });
+  } else {
+    BroadcastComputeImpl<cpu>(attrs, ctx, inputs, req, outputs, inputs[0].shape_);
+  }
+}
+
 MXNET_OPERATOR_REGISTER_REDUCE(sum)
 MXNET_ADD_SPARSE_OP_ALIAS(sum)
 .add_alias("sum_axis")
@@ -239,7 +274,7 @@ Example::
 .set_attr_parser(ParamParser<BroadcastAxesParam>)
 .add_arguments(BroadcastAxesParam::__FIELDS__())
 .set_attr<mxnet::FInferShape>("FInferShape", BroadcastAxesShape)
-.set_attr<FCompute>("FCompute<cpu>", BroadcastCompute<cpu>);
+.set_attr<FCompute>("FCompute<cpu>", BroadcastAxisCompute);
 
 MXNET_OPERATOR_REGISTER_BROADCAST(broadcast_to)
 .describe(R"code(Broadcasts the input array to a new shape.
