@@ -308,6 +308,13 @@ struct SoftmaxParam : public dmlc::Parameter<SoftmaxParam> {
     .describe("DType of the output in case this can't be inferred. "
               "Defaults to the same as input's dtype if not defined (dtype=None).");
   }
+
+
+  bool operator==(const SoftmaxParam& other) const {
+    return this->axis == other.axis &&
+           this->temperature == other.temperature &&
+           this->dtype == other.dtype;
+  }
 };
 
 static inline bool softmax_has_dtype_override(const nnvm::NodeAttrs& attrs) {
@@ -501,5 +508,18 @@ void SoftmaxGradCompute(const nnvm::NodeAttrs& attrs,
 
 }  // namespace op
 }  // namespace mxnet
+
+namespace std {
+template<>
+struct hash<mxnet::op::SoftmaxParam> {
+  size_t operator()(const mxnet::op::SoftmaxParam& val) {
+    size_t ret = 0;
+    ret = dmlc::HashCombine(ret, val.axis);
+    ret = dmlc::HashCombine(ret, val.temperature);
+    ret = dmlc::HashCombine(ret, val.dtype);
+    return ret;
+  }
+};
+}  // namespace std
 
 #endif  // MXNET_OPERATOR_NN_SOFTMAX_INL_H_
