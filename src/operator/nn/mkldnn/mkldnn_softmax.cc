@@ -62,6 +62,60 @@ static mkldnn::softmax_forward::primitive_desc GetSoftmaxFwdPd(const int axis,
   return pd;
 }
 
+class MKLDNNSoftmaxFwd {
+ public:
+  mkldnn::softmax_forward::primitive_desc pd_;
+  MKLDNNSoftmaxFwd(const int axis,
+                   const bool is_train,
+                   const mkldnn::memory &input) : pd_(GetSoftmaxFwdPd(axis, is_train, input)) {
+    data_ = std::make_shared<mkldnn::memory>(pd_.src_primitive_desc(), nullptr);
+    output_ = std::make_shared<mkldnn::memory>(pd_.dst_primitive_desc(), nullptr);
+    fwd_ = std::make_shared<mkldnn::softmax_forward>(pd_, *data_, *output_);
+  }
+
+  void SetNewMem(const mkldnn::memory &data,
+                 const mkldnn::memory &output) {
+    data_->set_data_handle(data.get_data_handle());
+    output_->set_data_handle(output.get_data_handle());
+  }
+
+  const mkldnn::softmax_forward &GetFwd() const {
+    return *fwd_;
+  }
+
+ private:
+  std::shared_ptr<mkldnn::memory> data_;
+  std::shared_ptr<mkldnn::memory> output_;
+  std::shared_ptr<mkldnn::softmax_forward> fwd_;
+};
+
+typedef ParamOpSign<SoftmaxParam> MKLDNNSoftmaxSignature;
+
+static MKLDNNSoftmaxFwd &GetSoftmaxFwd(const SoftmaxParam &param,
+                                       const int real_axis,
+                                       const bool is_train,
+                                       const NDArray &data,
+                                       const NDArray &output) {
+#if DMLC_CXX11_THREAD_LOCAL
+  static thread_local std::unordered_map<MKLDNNSoftmaxSignature, MKLDNNSoftmaxFwd, OpHash> fwds;
+#else
+  static MX_THREAD_LOCAL std::unordered_map<MKLDNNSoftmaxSignature, MKLDNNSoftmaxFwd, OpHash> fwds;
+#endif
+
+  MKLDNNSoftmaxSignature key(param);
+  key.AddSign(real_axis);
+  key.AddSign(is_train);
+  key.AddSign(data);
+  key.AddSign(output);
+
+  auto it = fwds.find(key);
+  if (it == fwds.end()) {
+    MKLDNNSoftmaxFwd fwd(real_axis, is_train, *(data.GetMKLDNNData()));
+    it = AddToCache(&fwds, key, fwd);
+  }
+  return it->second;
+}
+
 void MKLDNNSoftmaxForward(const nnvm::NodeAttrs &attrs,
                           const OpContext &ctx,
                           const NDArray &in_data,
@@ -78,11 +132,13 @@ void MKLDNNSoftmaxForward(const nnvm::NodeAttrs &attrs,
     data = in_data.Reorder2Default();
   }
 
+  auto fwd = GetSoftmaxFwd(param, axis, ctx.is_train, data, out_data);
   auto data_mem = data.GetMKLDNNData();
-  auto pd = GetSoftmaxFwdPd(axis, ctx.is_train, *data_mem);
-  auto out_mem = CreateMKLDNNMem(out_data, pd.dst_primitive_desc(), req);
+  auto out_mem = CreateMKLDNNMem(out_data, fwd.pd_.dst_primitive_desc(), req);
+
+  fwd.SetNewMem(*data_mem, *out_mem.second);
   MKLDNNStream *stream = MKLDNNStream::Get();
-  stream->RegisterPrim(mkldnn::softmax_forward(pd, *data_mem, *out_mem.second));
+  stream->RegisterPrim(fwd.GetFwd());
   CommitOutput(out_data, out_mem);
   stream->Submit();
 }
