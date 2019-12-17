@@ -115,9 +115,12 @@ static void ReshapeComputeExCPU(const nnvm::NodeAttrs& attrs,
                                 const std::vector<NDArray>& outputs) {
   CHECK_EQ(inputs.size(), 1U);
   CHECK_EQ(outputs.size(), 1U);
-  // If inputs are supposed to be in MKLDNN format and
-  // MKLDNN support the data type or the shape. Then convert
-  // it to the output format and shape
+
+  // return early if kWriteInplace and input has plain format
+  if (req[0] == kWriteInplace && !(inputs[0].IsMKLDNNData())) {
+    return;
+  }
+
   MKLDNNRun(MKLDNNReshapeForward, attrs, ctx, inputs[0], req[0], outputs[0]);
 }
 
